@@ -4,7 +4,7 @@ import io.jmix.securitydata.user.AbstractDatabaseUserRepository;
 import org.springframework.context.annotation.Primary;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
-import ru.thedevs.security.FullAccessRole;
+import ru.thedevs.security.roles.FullAccessRole;
 import ru.thedevs.testproject.entity.User;
 
 import java.util.Collection;

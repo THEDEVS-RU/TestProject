@@ -8,7 +8,7 @@ import io.jmix.security.authentication.JmixUserDetails;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Transient;
 import org.springframework.security.core.GrantedAuthority;
-import ru.thedevs.entities.BaseUser;
+import ru.thedevs.entities.UserEntity;
 
 import java.io.Serializable;
 import java.util.Collection;
@@ -16,8 +16,8 @@ import java.util.Collections;
 
 @JmixEntity
 @Entity
-@ReplaceEntity(BaseUser.class)
-public class User extends BaseUser implements JmixUserDetails, Serializable {
+@ReplaceEntity(UserEntity.class)
+public class User extends UserEntity implements JmixUserDetails, Serializable {
 
     @Transient
     private Collection<? extends GrantedAuthority> authorities;

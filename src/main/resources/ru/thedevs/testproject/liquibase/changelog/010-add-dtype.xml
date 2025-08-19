@@ -8,11 +8,11 @@
 
     <changeSet id="1" author="DREIZER">
         <validCheckSum>any</validCheckSum>
-        <addColumn tableName="BASE_USER">
+        <addColumn tableName="CORE_USER">
             <column name="dtype" type="VARCHAR(255)"/>
         </addColumn>
 
-        <update tableName="BASE_USER">
+        <update tableName="CORE_USER">
             <column name="DTYPE" value="User"/>
             <where>DTYPE is null</where>
         </update>

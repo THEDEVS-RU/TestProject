@@ -9,23 +9,21 @@
 
     <changeSet id="3-create-new-baseUser" author="DREIZER" context="!cuba">
 
-        <insert tableName="BASE_USER" dbms="postgresql, mssql, hsqldb">
+        <insert tableName="CORE_USER" dbms="postgresql, mssql, hsqldb">
             <column name="ID" value="60885987-1b61-4247-94c7-dff348347f93"/>
             <column name="VERSION" value="1"/>
             <column name="USERNAME" value="admin"/>
             <column name="PASSWORD" value="{noop}admin"/>
             <column name="ACTIVE" valueBoolean="true"/>
-            <column name="type_" value="INDIVIDUAL"/>
             <column name="dtype" value="User"/>
         </insert>
 
-        <insert tableName="BASE_USER" dbms="oracle, mysql, mariadb">
+        <insert tableName="CORE_USER" dbms="oracle, mysql, mariadb">
             <column name="ID" value="608859871b61424794c7dff348347f93"/>
             <column name="VERSION" value="1"/>
             <column name="USERNAME" value="admin"/>
             <column name="PASSWORD" value="{noop}admin"/>
             <column name="ACTIVE" valueBoolean="true"/>
-            <column name="type_" value="INDIVIDUAL"/>
             <column name="dtype" value="User"/>
         </insert>
 
