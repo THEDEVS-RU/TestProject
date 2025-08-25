@@ -13,7 +13,7 @@ jmix {
 }
 
 group = 'ru.thedevs'
-version = '0.0.1-SNAPSHOT'
+version = '0.0.1'
 
 repositories {
     mavenCentral()
@@ -46,9 +46,9 @@ dependencies {
 
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'ru.thedevs:core:2.6.1.32'
-    implementation 'ru.thedevs:core-ui:2.6.1.12'
-    implementation 'ru.thedevs:security:2.6.1.10'
+    implementation 'ru.thedevs:core:2.6.1.51'
+    implementation 'ru.thedevs:core-ui:2.6.1.15'
+    implementation 'ru.thedevs:security:2.6.1.17'
 
     runtimeOnly 'org.hsqldb:hsqldb'
 
