@@ -1,8 +1,12 @@
 package ru.thedevs.testproject.coreui;
 
+import com.vaadin.flow.component.avatar.Avatar;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.server.StreamResource;
+import io.jmix.core.FileRef;
+import io.jmix.core.FileStorage;
 import io.jmix.core.FileStorageLocator;
 import io.jmix.flowui.UiComponents;
 import io.jmix.flowui.ViewNavigators;
@@ -55,15 +59,17 @@ public class UiUtils {
 
     public HorizontalLayout getDefaultHbWithIcon(String iconName, String iconStyleName) {
         HorizontalLayout defaultHb = uiComponents.create(HorizontalLayout.class);
-        defaultHb.add(getDefaultIconButton(iconName, iconStyleName));
+        defaultHb.add(getDefaultButton(iconName, iconStyleName));
         return defaultHb;
     }
 
-    public JmixButton getDefaultIconButton(String iconName, String styleName) {
+    public JmixButton getDefaultButton(String iconName, String styleName) {
         JmixButton button = uiComponents.create(JmixButton.class);
         button.setThemeName(styleName == null ? "icon-only" : "icon-only" + " " + styleName);
         button.setEnabled(true);
-        button.setIcon(new Icon(iconName));
+        if(iconName != null) {
+            button.setIcon(new Icon(iconName));
+        }
         return button;
     }
 
@@ -83,11 +89,34 @@ public class UiUtils {
             return box;
         }
 
-        JmixButton nameButton = getDefaultIconButton("vaadin:user", "tertiary-inline");
-        nameButton.setText(user.getInstanceName());
+        Avatar avatar = createUserAvatar(user);
+
+        JmixButton nameButton = getDefaultButton(null, "tertiary-inline");
+        nameButton.setText(user.getDisplayedName());
         nameButton.addClickListener(e -> openUserDetail(user));
-        box.add(nameButton);
+        box.add(avatar, nameButton);
         return box;
+    }
+
+    private Avatar createUserAvatar(UserEntity user) {
+        Avatar avatar = new Avatar(user.getInstanceName());
+        avatar.setThemeName("xsmall");
+
+        FileRef picture = user.getPicture();
+        if (picture != null) {
+            try {
+                FileStorage fileStorage = fileStorageLocator.getDefault();
+
+                StreamResource resource = new StreamResource(
+                        picture.getFileName(),
+                        () -> fileStorage.openStream(picture)
+                );
+
+                avatar.setImageResource(resource);
+            } catch (Exception e) {}
+        }
+
+        return avatar;
     }
 
     private void openUserDetail(UserEntity user) {
