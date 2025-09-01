@@ -59,16 +59,24 @@ public class UiUtils {
 
     public HorizontalLayout getDefaultHbWithIcon(String iconName, String iconStyleName) {
         HorizontalLayout defaultHb = uiComponents.create(HorizontalLayout.class);
-        defaultHb.add(getDefaultButton(iconName, iconStyleName));
+        defaultHb.add(getDefaultButton(iconName, iconStyleName, null, null));
         return defaultHb;
     }
 
-    public JmixButton getDefaultButton(String iconName, String styleName) {
+    public JmixButton getDefaultButton(String iconName, String styleName,
+                                       String userNameOnDisplay, ComponentEventListener
+                                               <ClickEvent<Button>> clickEvent) {
         JmixButton button = uiComponents.create(JmixButton.class);
         button.setThemeName(styleName == null ? "icon-only" : "icon-only" + " " + styleName);
         button.setEnabled(true);
-        if(iconName != null) {
+        if (iconName != null) {
             button.setIcon(new Icon(iconName));
+        }
+        if (userNameOnDisplay != null) {
+            button.setText(userNameOnDisplay);
+        }
+        if (clickEvent != null) {
+            button.addClickListener(clickEvent);
         }
         return button;
     }
@@ -91,15 +99,15 @@ public class UiUtils {
 
         Avatar avatar = createUserAvatar(user);
 
-        JmixButton nameButton = getDefaultButton(null, "tertiary-inline");
-        nameButton.setText(user.getDisplayedName());
-        nameButton.addClickListener(e -> openUserDetail(user));
+        JmixButton nameButton = getDefaultButton(null, "tertiary-inline",
+                user.getDisplayName(), e -> openUserDetail(user));
+
         box.add(avatar, nameButton);
         return box;
     }
 
     private Avatar createUserAvatar(UserEntity user) {
-        Avatar avatar = new Avatar(user.getInstanceName());
+        Avatar avatar = new Avatar(user.getDisplayName());
         avatar.setThemeName("xsmall");
 
         FileRef picture = user.getPicture();
@@ -113,7 +121,8 @@ public class UiUtils {
                 );
 
                 avatar.setImageResource(resource);
-            } catch (Exception e) {}
+            } catch (Exception e) {
+            }
         }
 
         return avatar;
