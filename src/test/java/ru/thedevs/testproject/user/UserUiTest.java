@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import ru.thedevs.testproject.TestProjectApplication;
 import ru.thedevs.testproject.entity.User;
+import ru.thedevs.testproject.view.user.UserDetailView;
 
 /**
  * Sample UI integration test for the User entity.

@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <view xmlns="http://jmix.io/schema/flowui/view"
-      title="msg://UserDetailView.title"
+      title="msg://ru.thedevs.testproject.entity/User"
       focusComponent="form">
     <data>
         <instance id="userDc"
                   class="ru.thedevs.testproject.entity.User">
-            <fetchPlan extends="_base"/>
+            <fetchPlan extends="_base">
+                <property name="urls"/>
+            </fetchPlan>
             <loader/>
         </instance>
     </data>
@@ -19,23 +21,53 @@
     <layout>
         <formLayout id="form" dataContainer="userDc">
             <textField id="usernameField" property="username" readOnly="true"/>
+            <textField id="NameField" property="firstName"/>
+            <textField id="LastNameField" property="lastName"/>
+            <textField id="MiddleNameField" property="middleName"/>
             <passwordField id="passwordField"
-                           label="msg://ru.thedevs.testproject.entity/User.password"
                            required="true"
-                           visible="false"/>
+                           visible="false" label="msg://ru.thedevs.entities.view.baseUser/passwordField.label"/>
             <passwordField id="confirmPasswordField"
-                           label="msg://confirmPassword"
+                           label="msg://ru.thedevs.entities.view.baseUser/confirmPassword"
                            required="true"
                            visible="false"/>
-            <textField id="firstNameField" property="firstName"/>
-            <textField id="lastNameField" property="lastName"/>
-            <textField id="emailField" property="email"/>
             <comboBox id="timeZoneField" property="timeZoneId" clearButtonVisible="true"/>
             <checkbox id="activeField" property="active"/>
+
+            <hbox>
+                <textField id="emailField" readOnly="true"/>
+                <button id="editEmailButton" text="msg://ru.thedevs.coreui.view.user/editEmail"/>
+                <button id="saveEmailButton" text="msg://ru.thedevs.coreui.view.user/saveEmail" visible="false"/>
+                <button id="cancelEmailButton" text="msg://ru.thedevs.coreui.view.user/cancelEmail" visible="false"/>
+            </hbox>
+
+            <hbox>
+                <textField id="emailCodeField" placeholder="Введите код подтверждения" visible="false"/>
+                <button id="confirmEmailButton" text="msg://ru.thedevs.coreui.view.user/confirmEmail" visible="false"/>
+            </hbox>
+
+            <hbox>
+                <textField id="phoneField" datatype="long" readOnly="true"/>
+                <button id="editPhoneButton" text="msg://ru.thedevs.coreui.view.user/editPhone"/>
+                <button id="savePhoneButton" text="msg://ru.thedevs.coreui.view.user/savePhone" visible="false"/>
+                <button id="cancelPhoneButton" text="msg://ru.thedevs.coreui.view.user/cancelPhone" visible="false"/>
+            </hbox>
+
+            <hbox>
+                <textField id="phoneCodeField" placeholder="Введите код подтверждения" visible="false"/>
+                <button id="confirmPhoneButton" text="msg://ru.thedevs.coreui.view.user/confirmPhone" visible="false"/>
+            </hbox>
+
+            <fileStorageUploadField id="avatarField" property="picture"/>
+            <textField id="innField" property="inn"/>
+            <datePicker id="birthDatePicker" property="dateOfBirth"/>
+            <textField id="contactLinkField" property="urls" label="msg://ru.thedevs.coreui.view.user/userLinks"/>
+
         </formLayout>
         <hbox id="detailActions">
-            <button id="saveAndCloseButton" action="saveAction"/>
-            <button id="closeButton" action="closeAction"/>
+            <button id="saveAndCloseBtn" action="saveAction"/>
+            <button id="closeBtn" action="closeAction"/>
+            <button id="removeAccountButton" text="msg://ru.thedevs.coreui.view.user/removeAccount" themeNames="primary error"/>
         </hbox>
     </layout>
 </view>
