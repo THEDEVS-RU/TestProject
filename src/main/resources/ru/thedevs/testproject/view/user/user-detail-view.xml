@@ -61,7 +61,7 @@
             <fileStorageUploadField id="avatarField" property="picture"/>
             <textField id="innField" property="inn"/>
             <datePicker id="birthDatePicker" property="dateOfBirth"/>
-            <textField id="contactLinkField" property="urls" label="msg://ru.thedevs.coreui.view.user/userLinks"/>
+            <textField id="contactLinkField" label="msg://ru.thedevs.coreui.view.user/userLinks"/>
 
         </formLayout>
         <hbox id="detailActions">

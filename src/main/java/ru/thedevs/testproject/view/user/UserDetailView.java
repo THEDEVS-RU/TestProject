@@ -12,6 +12,7 @@ import io.jmix.flowui.Dialogs;
 import io.jmix.flowui.action.DialogAction;
 import ru.thedevs.entities.Email;
 import ru.thedevs.entities.Phone;
+import ru.thedevs.entities.Url;
 import ru.thedevs.entities.UserEntity;
 import io.jmix.core.EntityStates;
 import io.jmix.flowui.component.checkbox.JmixCheckbox;
@@ -22,9 +23,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import com.vaadin.flow.component.UI;
 import ru.thedevs.testproject.view.main.MainView;
 
-import java.util.List;
-import java.util.Objects;
-import java.util.TimeZone;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Route(value = "User/:id", layout = MainView.class)
 @ViewController("User.detail")
@@ -81,7 +81,8 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     private TypedTextField<String> emailCodeField;
     @ViewComponent
     private TypedTextField<String> phoneCodeField;
-
+    @ViewComponent
+    private TextField contactLinkField;
 
     /**
      * Инициализация.
@@ -93,23 +94,7 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     public void onInit(final InitEvent event) {
         timeZoneField.setItems(List.of(TimeZone.getAvailableIDs()));
 
-        if (getEditedEntity().getEmail() != null) {
-            emailField.setValue(getEditedEntity().getEmail().getEmail());
-            if (!Boolean.TRUE.equals(getEditedEntity().getEmail().getConfirmed())) {
-                confirmEmailButton.setVisible(true);
-            } else {
-                confirmEmailButton.setVisible(false);
-            }
-        }
 
-        if (getEditedEntity().getPhone() != null) {
-            phoneField.setValue(String.valueOf(getEditedEntity().getPhone().getNumber()));
-            if (!Boolean.TRUE.equals(getEditedEntity().getPhone().getConfirmed())) {
-                confirmPhoneButton.setVisible(true);
-            } else {
-                confirmPhoneButton.setVisible(false);
-            }
-        }
     }
 
     /**
@@ -126,8 +111,10 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     }
 
     /**
-     * Вызывается после загрузки данных на форму.
-     * Если создаётся новый пользователь — устанавливает фокус на поле логина.
+     * Вызывается после загрузки данных в форму.
+     * При новом пользователе ставит фокус на логин,
+     * заполняет email/телефон, управляет видимостью кнопок подтверждения
+     * и восстанавливает ссылки из связанных сущностей.
      *
      * @param event событие готовности
      */
@@ -135,6 +122,36 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     public void onReady(final ReadyEvent event) {
         if (entityStates.isNew(getEditedEntity())) {
             usernameField.focus();
+        }
+
+        if (getEditedEntity().getEmail() != null) {
+            emailField.setValue(getEditedEntity().getEmail().getEmail());
+
+            boolean confirmed = Boolean.TRUE.equals(getEditedEntity().getEmail().getConfirmed());
+            confirmEmailButton.setVisible(!confirmed);
+            emailCodeField.setVisible(!confirmed);
+        } else {
+            confirmEmailButton.setVisible(false);
+            emailCodeField.setVisible(false);
+        }
+
+        if (getEditedEntity().getPhone() != null) {
+            phoneField.setTypedValue(getEditedEntity().getPhone().getNumber());
+
+            boolean confirmed = Boolean.TRUE.equals(getEditedEntity().getPhone().getConfirmed());
+            confirmPhoneButton.setVisible(!confirmed);
+            phoneCodeField.setVisible(!confirmed);
+        } else {
+            confirmPhoneButton.setVisible(false);
+            phoneCodeField.setVisible(false);
+        }
+
+        Set<Url> urls = getEditedEntity().getUrls();
+        if (urls != null && !urls.isEmpty()) {
+            String joined = urls.stream()
+                    .map(Url::getUrl) //
+                    .collect(Collectors.joining(", "));
+            contactLinkField.setValue(joined);
         }
     }
 
@@ -154,7 +171,9 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
 
     /**
      * Выполняется перед сохранением пользователя.
-     * Шифрует пароль, обновляет email и телефон при изменении.
+     * Шифрует новый пароль, обновляет email и телефон при изменении,
+     * очищает старые записи и создаёт новые сущности,
+     * а также сохраняет ссылки из поля контактов.
      *
      * @param event событие перед сохранением
      */
@@ -193,6 +212,22 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                 dataManager.save(newPhoneEntity);
                 getEditedEntity().setPhone(newPhoneEntity);
             }
+        }
+
+        String linksValue = contactLinkField.getValue();
+        if (linksValue != null && !linksValue.isBlank()) {
+            Set<Url> urls = Arrays.stream(linksValue.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .map(s -> {
+                        Url url = dataManager.create(Url.class);
+                        url.setUrl(s);
+                        return url;
+                    })
+                    .collect(Collectors.toSet());
+            getEditedEntity().setUrls(urls);
+        } else {
+            getEditedEntity().setUrls(Collections.emptySet());
         }
     }
 
@@ -239,8 +274,9 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
 
     /**
      * Обработчик нажатия кнопки Сохранить для email'a.
-     * Делает поле email'a недоступным для редактирования, скрывает кнопки Сохранить/Отменить.
-     * и показывает кнопку подтверждения email'a.
+     * Блокирует редактирование поля email, обновляет сущность при изменении значения,
+     * скрывает кнопки Сохранить/Отменить, показывает кнопку редактирования
+     * и при необходимости отображает элементы подтверждения email'a.
      *
      * @param event событие клика
      */
@@ -250,6 +286,17 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
         saveEmailButton.setVisible(false);
         cancelEmailButton.setVisible(false);
         editEmailButton.setVisible(true);
+
+        String newEmail = emailField.getValue();
+        if (newEmail != null) {
+            Email currentEmail = getEditedEntity().getEmail();
+            if (currentEmail == null || !Objects.equals(currentEmail.getEmail(), newEmail)) {
+                Email newEmailEntity = dataManager.create(Email.class);
+                newEmailEntity.setEmail(newEmail);
+                newEmailEntity.setConfirmed(false);
+                getEditedEntity().setEmail(newEmailEntity);
+            }
+        }
 
         if (getEditedEntity().getEmail() != null
                 && Boolean.FALSE.equals(getEditedEntity().getEmail().getConfirmed())) {
@@ -336,6 +383,17 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
         cancelPhoneButton.setVisible(false);
         editPhoneButton.setVisible(true);
 
+        Long newPhone = phoneField.getTypedValue();
+        if (newPhone != null) {
+            Phone currentPhone = getEditedEntity().getPhone();
+            if (currentPhone == null || !Objects.equals(currentPhone.getNumber(), newPhone)) {
+                Phone newPhoneEntity = dataManager.create(Phone.class);
+                newPhoneEntity.setNumber(newPhone);
+                newPhoneEntity.setConfirmed(false);
+                getEditedEntity().setPhone(newPhoneEntity);
+            }
+        }
+
         if (getEditedEntity().getPhone() != null
                 && Boolean.FALSE.equals(getEditedEntity().getPhone().getConfirmed())) {
             phoneCodeField.setVisible(true);
@@ -390,11 +448,25 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                 .open();
     }
 
+    /**
+     * Проверяет введённый код подтверждения email.
+     * Сейчас используется заглушка, ожидается код "1234".
+     *
+     * @param code введённый пользователем код
+     * @return true, если код корректный
+     */
     private boolean isValidEmailCode(String code) {
-        // TODO: заменить на настоящую проверку )
+        // TODO: заменить на настоящую проверку
         return "1234".equals(code);
     }
 
+    /**
+     * Проверяет введённый код подтверждения телефона.
+     * Сейчас используется заглушка, ожидается код "5678".
+     *
+     * @param code введённый пользователем код
+     * @return true, если код корректный
+     */
     private boolean isValidPhoneCode(String code) {
         // TODO: заменить на настоящую проверку
         return "5678".equals(code);
