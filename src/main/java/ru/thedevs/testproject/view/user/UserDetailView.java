@@ -215,21 +215,37 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
         }
 
         String linksValue = contactLinkField.getValue();
+        Set<Url> existingUrls = new HashSet<>(getEditedEntity().getUrls());
+
         if (linksValue != null && !linksValue.isBlank()) {
-            Set<Url> urls = Arrays.stream(linksValue.split(","))
+            Set<String> newUrls = Arrays.stream(linksValue.split(","))
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())
-                    .map(s -> {
-                        Url url = dataManager.create(Url.class);
-                        url.setUrl(s);
-                        url.setUser(getEditedEntity());
-                        return url;
-                    })
                     .collect(Collectors.toSet());
-            getEditedEntity().setUrls(urls);
+
+            existingUrls.stream()
+                    .filter(url -> !newUrls.contains(url.getUrl()))
+                    .forEach(url -> {
+                        getEditedEntity().getUrls().remove(url);
+                        dataManager.remove(url);
+                    });
+
+            newUrls.stream()
+                    .filter(newUrl -> existingUrls.stream().noneMatch(u -> u.getUrl().equals(newUrl)))
+                    .forEach(newUrl -> {
+                        Url url = dataManager.create(Url.class);
+                        url.setUrl(newUrl);
+                        url.setUser(getEditedEntity());
+                        getEditedEntity().getUrls().add(url);
+                    });
+
         } else {
-            getEditedEntity().setUrls(Collections.emptySet());
+            existingUrls.forEach(url -> {
+                getEditedEntity().getUrls().remove(url);
+                dataManager.remove(url);
+            });
         }
+
     }
 
     /**
