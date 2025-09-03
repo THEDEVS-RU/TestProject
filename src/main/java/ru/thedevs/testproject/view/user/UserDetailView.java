@@ -222,6 +222,7 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                     .map(s -> {
                         Url url = dataManager.create(Url.class);
                         url.setUrl(s);
+                        url.setUser(getEditedEntity());
                         return url;
                     })
                     .collect(Collectors.toSet());
