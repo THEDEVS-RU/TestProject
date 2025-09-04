@@ -12,7 +12,6 @@ import io.jmix.flowui.Dialogs;
 import io.jmix.flowui.action.DialogAction;
 import ru.thedevs.entities.Email;
 import ru.thedevs.entities.Phone;
-import ru.thedevs.entities.Url;
 import ru.thedevs.entities.UserEntity;
 import io.jmix.core.EntityStates;
 import io.jmix.flowui.component.checkbox.JmixCheckbox;
@@ -21,12 +20,13 @@ import io.jmix.flowui.view.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import com.vaadin.flow.component.UI;
+import ru.thedevs.testproject.ContactService;
+import ru.thedevs.testproject.UiUtils;
 import ru.thedevs.testproject.view.main.MainView;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
-@Route(value = "User/:id", layout = MainView.class)
+@Route(value = "user/:id", layout = MainView.class)
 @ViewController("User.detail")
 @ViewDescriptor("user-detail-view.xml")
 @EditedEntityContainer("userDc")
@@ -42,6 +42,10 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     private DataManager dataManager;
     @Autowired
     private Dialogs dialogs;
+    @Autowired
+    private ContactService contactService;
+    @Autowired
+    private UiUtils uiUtils;
 
     @ViewComponent
     private TypedTextField<String> usernameField;
@@ -77,12 +81,6 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     private Button savePhoneButton;
     @ViewComponent
     private Button cancelPhoneButton;
-    @ViewComponent
-    private TypedTextField<String> emailCodeField;
-    @ViewComponent
-    private TypedTextField<String> phoneCodeField;
-    @ViewComponent
-    private TextField contactLinkField;
 
     /**
      * Инициализация.
@@ -123,36 +121,11 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
         if (entityStates.isNew(getEditedEntity())) {
             usernameField.focus();
         }
+        emailField.setValue(getEditedEntity().getEmail() != null ? getEditedEntity().getEmail().getEmail() : null);
+        confirmEmailButton.setVisible(getEditedEntity().getEmail() != null && !Boolean.TRUE.equals(getEditedEntity().getEmail().getConfirmed()));
 
-        if (getEditedEntity().getEmail() != null) {
-            emailField.setValue(getEditedEntity().getEmail().getEmail());
-
-            boolean confirmed = Boolean.TRUE.equals(getEditedEntity().getEmail().getConfirmed());
-            confirmEmailButton.setVisible(!confirmed);
-            emailCodeField.setVisible(!confirmed);
-        } else {
-            confirmEmailButton.setVisible(false);
-            emailCodeField.setVisible(false);
-        }
-
-        if (getEditedEntity().getPhone() != null) {
-            phoneField.setTypedValue(getEditedEntity().getPhone().getNumber());
-
-            boolean confirmed = Boolean.TRUE.equals(getEditedEntity().getPhone().getConfirmed());
-            confirmPhoneButton.setVisible(!confirmed);
-            phoneCodeField.setVisible(!confirmed);
-        } else {
-            confirmPhoneButton.setVisible(false);
-            phoneCodeField.setVisible(false);
-        }
-
-        Set<Url> urls = getEditedEntity().getUrls();
-        if (urls != null && !urls.isEmpty()) {
-            String joined = urls.stream()
-                    .map(Url::getUrl) //
-                    .collect(Collectors.joining(", "));
-            contactLinkField.setValue(joined);
-        }
+        phoneField.setTypedValue(getEditedEntity().getPhone() != null ? getEditedEntity().getPhone().getNumber() : null);
+        confirmPhoneButton.setVisible(getEditedEntity().getPhone() != null && !Boolean.TRUE.equals(getEditedEntity().getPhone().getConfirmed()));
     }
 
     /**
@@ -165,7 +138,7 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     public void onValidation(final ValidationEvent event) {
         if (entityStates.isNew(getEditedEntity())
                 && !Objects.equals(passwordField.getValue(), confirmPasswordField.getValue())) {
-            event.getErrors().add(messageBundle.getMessage("passwordsDoNotMatch"));
+            event.getErrors().add("passwordsDoNotMatch");
         }
     }
 
@@ -183,70 +156,8 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
             getEditedEntity().setPassword(passwordEncoder.encode(passwordField.getValue()));
         }
 
-        String newEmail = emailField.getValue();
-        if (newEmail != null) {
-            Email currentEmail = getEditedEntity().getEmail();
-            if (currentEmail == null || !Objects.equals(currentEmail.getEmail(), newEmail)) {
-                if (currentEmail != null) {
-                    dataManager.remove(currentEmail);
-                }
-
-                Email newEmailEntity = dataManager.create(Email.class);
-                newEmailEntity.setEmail(newEmail);
-                newEmailEntity.setConfirmed(false);
-                dataManager.save(newEmailEntity);
-                getEditedEntity().setEmail(newEmailEntity);
-            }
-        }
-
-        Long newPhone = phoneField.getTypedValue();
-        if (newPhone != null) {
-            Phone currentPhone = getEditedEntity().getPhone();
-            if (currentPhone == null || !Objects.equals(currentPhone.getNumber(), newPhone)) {
-                if (currentPhone != null) {
-                    dataManager.remove(currentPhone);
-                }
-
-                Phone newPhoneEntity = dataManager.create(Phone.class);
-                newPhoneEntity.setNumber(newPhone);
-                dataManager.save(newPhoneEntity);
-                getEditedEntity().setPhone(newPhoneEntity);
-            }
-        }
-
-        String linksValue = contactLinkField.getValue();
-        Set<Url> existingUrls = new HashSet<>(getEditedEntity().getUrls());
-
-        if (linksValue != null && !linksValue.isBlank()) {
-            Set<String> newUrls = Arrays.stream(linksValue.split(","))
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .collect(Collectors.toSet());
-
-            existingUrls.stream()
-                    .filter(url -> !newUrls.contains(url.getUrl()))
-                    .forEach(url -> {
-                        getEditedEntity().getUrls().remove(url);
-                        dataManager.remove(url);
-                    });
-
-            newUrls.stream()
-                    .filter(newUrl -> existingUrls.stream().noneMatch(u -> u.getUrl().equals(newUrl)))
-                    .forEach(newUrl -> {
-                        Url url = dataManager.create(Url.class);
-                        url.setUrl(newUrl);
-                        url.setUser(getEditedEntity());
-                        getEditedEntity().getUrls().add(url);
-                    });
-
-        } else {
-            existingUrls.forEach(url -> {
-                getEditedEntity().getUrls().remove(url);
-                dataManager.remove(url);
-            });
-        }
-
     }
+
 
     /**
      * Обработчик нажатия кнопки подтвердения email'a".
@@ -254,25 +165,31 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
      *
      * @param event событие клика
      */
+
     @Subscribe("confirmEmailButton")
-    public void onConfirmEmailBtnClick(ClickEvent<Button> event) {
-        if (getEditedEntity().getEmail() != null) {
-            String code = emailCodeField.getValue();
-
-            if (isValidEmailCode(code)) {
-                getEditedEntity().getEmail().setConfirmed(true);
-                dataManager.save(getEditedEntity().getEmail());
-
-                emailCodeField.clear();
-                emailCodeField.setVisible(false);
-                confirmEmailButton.setVisible(false);
-            } else {
-                dialogs.createMessageDialog()
-                        .withHeader("Ошибка")
-                        .withText("Неверный код подтверждения e-mail")
-                        .open();
-            }
-        }
+    public void onConfirmEmailClick(ClickEvent<Button> event) {
+        uiUtils.openConfirmationDialog(
+                "ConfirmEmail",
+                "Введите код из письма, отправленного на новый email",
+                code -> {
+                    try {
+                        contactService.confirmEmail(getEditedEntity(), code);
+                        confirmEmailButton.setVisible(false); // подтверждён → скрываем
+                    } catch (RuntimeException ex) {
+                        dialogs.createMessageDialog()
+                                .withHeader("Error")
+                                .withText(ex.getMessage())
+                                .open();
+                    }
+                },
+                () -> {
+                    contactService.rollbackEmailChange(getEditedEntity());
+                    confirmEmailButton.setVisible(false); // откат → скрываем
+                    emailField.setValue(getEditedEntity().getEmail() != null
+                            ? getEditedEntity().getEmail().getEmail()
+                            : "");
+                }
+        );
     }
 
     /**
@@ -306,22 +223,12 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
 
         String newEmail = emailField.getValue();
         if (newEmail != null) {
-            Email currentEmail = getEditedEntity().getEmail();
-            if (currentEmail == null || !Objects.equals(currentEmail.getEmail(), newEmail)) {
-                Email newEmailEntity = dataManager.create(Email.class);
-                newEmailEntity.setEmail(newEmail);
-                newEmailEntity.setConfirmed(false);
-                getEditedEntity().setEmail(newEmailEntity);
-            }
-        }
+            contactService.requestEmailChange(getEditedEntity(), newEmail);
 
-        if (getEditedEntity().getEmail() != null
-                && Boolean.FALSE.equals(getEditedEntity().getEmail().getConfirmed())) {
-            emailCodeField.setVisible(true);
-            confirmEmailButton.setVisible(true);
-        } else {
-            emailCodeField.setVisible(false);
-            confirmEmailButton.setVisible(false);
+            if (getEditedEntity().getEmail() != null
+                    && Boolean.FALSE.equals(getEditedEntity().getEmail().getConfirmed())) {
+                confirmEmailButton.setVisible(true);
+            }
         }
     }
 
@@ -351,26 +258,30 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
      */
 
     @Subscribe("confirmPhoneButton")
-    public void onConfirmPhoneBtnClick(ClickEvent<Button> event) {
-        if (getEditedEntity().getPhone() != null) {
-            String code = phoneCodeField.getValue();
-
-            if (isValidPhoneCode(code)) {
-                getEditedEntity().getPhone().setConfirmed(true);
-                dataManager.save(getEditedEntity().getPhone());
-
-                phoneCodeField.clear();
-                phoneCodeField.setVisible(false);
-                confirmPhoneButton.setVisible(false);
-            } else {
-                dialogs.createMessageDialog()
-                        .withHeader("Ошибка")
-                        .withText("Неверный код подтверждения телефона")
-                        .open();
-            }
-        }
+    public void onConfirmPhoneClick(ClickEvent<Button> event) {
+        uiUtils.openConfirmationDialog(
+                "confirmPhone",
+                "confirmPhoneCaption",
+                code -> {
+                    try {
+                        contactService.confirmPhone(getEditedEntity(), code);
+                        confirmPhoneButton.setVisible(false); // подтверждён → скрываем
+                    } catch (RuntimeException ex) {
+                        dialogs.createMessageDialog()
+                                .withHeader("Error")
+                                .withText(ex.getMessage())
+                                .open();
+                    }
+                },
+                () -> {
+                    contactService.rollbackPhoneChange(getEditedEntity());
+                    confirmPhoneButton.setVisible(false); // откат → скрываем
+                    phoneField.setValue(getEditedEntity().getPhone() != null
+                            ? String.valueOf(getEditedEntity().getPhone().getNumber())
+                            : "");
+                }
+        );
     }
-
 
     /**
      * Обработчик нажатия кнопки Изменить для телефона.
@@ -402,22 +313,12 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
 
         Long newPhone = phoneField.getTypedValue();
         if (newPhone != null) {
-            Phone currentPhone = getEditedEntity().getPhone();
-            if (currentPhone == null || !Objects.equals(currentPhone.getNumber(), newPhone)) {
-                Phone newPhoneEntity = dataManager.create(Phone.class);
-                newPhoneEntity.setNumber(newPhone);
-                newPhoneEntity.setConfirmed(false);
-                getEditedEntity().setPhone(newPhoneEntity);
-            }
-        }
+            contactService.requestPhoneChange(getEditedEntity(), newPhone);
 
-        if (getEditedEntity().getPhone() != null
-                && Boolean.FALSE.equals(getEditedEntity().getPhone().getConfirmed())) {
-            phoneCodeField.setVisible(true);
-            confirmPhoneButton.setVisible(true);
-        } else {
-            phoneCodeField.setVisible(false);
-            confirmPhoneButton.setVisible(false);
+            if (getEditedEntity().getPhone() != null
+                    && Boolean.FALSE.equals(getEditedEntity().getPhone().getConfirmed())) {
+                confirmPhoneButton.setVisible(true);
+            }
         }
     }
 
@@ -463,30 +364,6 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                         new DialogAction(DialogAction.Type.NO)
                 )
                 .open();
-    }
-
-    /**
-     * Проверяет введённый код подтверждения email.
-     * Сейчас используется заглушка, ожидается код "1234".
-     *
-     * @param code введённый пользователем код
-     * @return true, если код корректный
-     */
-    private boolean isValidEmailCode(String code) {
-        // TODO: заменить на настоящую проверку
-        return "1234".equals(code);
-    }
-
-    /**
-     * Проверяет введённый код подтверждения телефона.
-     * Сейчас используется заглушка, ожидается код "5678".
-     *
-     * @param code введённый пользователем код
-     * @return true, если код корректный
-     */
-    private boolean isValidPhoneCode(String code) {
-        // TODO: заменить на настоящую проверку
-        return "5678".equals(code);
     }
 
 }
