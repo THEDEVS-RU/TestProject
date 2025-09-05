@@ -8,23 +8,24 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.VaadinSession;
 import io.jmix.core.DataManager;
+import io.jmix.core.EntityStates;
+import io.jmix.core.Messages;
 import io.jmix.flowui.Dialogs;
 import io.jmix.flowui.action.DialogAction;
-import ru.thedevs.entities.Email;
-import ru.thedevs.entities.Phone;
-import ru.thedevs.entities.UserEntity;
-import io.jmix.core.EntityStates;
 import io.jmix.flowui.component.checkbox.JmixCheckbox;
 import io.jmix.flowui.component.textfield.TypedTextField;
 import io.jmix.flowui.view.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import com.vaadin.flow.component.UI;
+import ru.thedevs.entities.UserEntity;
 import ru.thedevs.testproject.ContactService;
 import ru.thedevs.testproject.UiUtils;
 import ru.thedevs.testproject.view.main.MainView;
 
-import java.util.*;
+import java.util.List;
+import java.util.Objects;
+import java.util.TimeZone;
 
 @Route(value = "user/:id", layout = MainView.class)
 @ViewController("User.detail")
@@ -34,72 +35,41 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
 
     private static final String LOGIN_PAGE = "login";
 
-    @Autowired
-    private EntityStates entityStates;
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-    @Autowired
-    private DataManager dataManager;
-    @Autowired
-    private Dialogs dialogs;
-    @Autowired
-    private ContactService contactService;
-    @Autowired
-    private UiUtils uiUtils;
+    @Autowired private EntityStates entityStates;
+    @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private DataManager dataManager;
+    @Autowired private Dialogs dialogs;
+    @Autowired private ContactService contactService;
+    @Autowired private UiUtils uiUtils;
 
-    @ViewComponent
-    private TypedTextField<String> usernameField;
-    @ViewComponent
-    private PasswordField passwordField;
-    @ViewComponent
-    private PasswordField confirmPasswordField;
-    @ViewComponent
-    private ComboBox<String> timeZoneField;
-    @ViewComponent
-    private MessageBundle messageBundle;
-    @ViewComponent
-    private TextField emailField;
-    @ViewComponent
-    private Button confirmEmailButton;
-    @ViewComponent("phoneField")
-    private TypedTextField<Long> phoneField;
-    @ViewComponent
-    private Button removeAccountButton;
-    @ViewComponent
-    private JmixCheckbox activeField;
-    @ViewComponent
-    private Button confirmPhoneButton;
-    @ViewComponent
-    private Button editEmailButton;
-    @ViewComponent
-    private Button saveEmailButton;
-    @ViewComponent
-    private Button cancelEmailButton;
-    @ViewComponent
-    private Button editPhoneButton;
-    @ViewComponent
-    private Button savePhoneButton;
-    @ViewComponent
-    private Button cancelPhoneButton;
+    @ViewComponent private TypedTextField<String> usernameField;
+    @ViewComponent private PasswordField passwordField;
+    @ViewComponent private PasswordField confirmPasswordField;
+    @ViewComponent private ComboBox<String> timeZoneField;
+    @ViewComponent private MessageBundle messageBundle;
+    @ViewComponent private TextField emailField;
+    @ViewComponent private Button confirmEmailButton;
+    @ViewComponent("phoneField") private TypedTextField<Long> phoneField;
+    @ViewComponent private Button removeAccountButton;
+    @ViewComponent private JmixCheckbox activeField;
+    @ViewComponent private Button confirmPhoneButton;
+    @ViewComponent private Button editEmailButton;
+    @ViewComponent private Button saveEmailButton;
+    @ViewComponent private Button cancelEmailButton;
+    @ViewComponent private Button editPhoneButton;
+    @ViewComponent private Button savePhoneButton;
+    @ViewComponent private Button cancelPhoneButton;
 
     /**
-     * Инициализация.
-     * Устанавливает список доступных временных зон и подставляет значения email и телефона из сущности.
-     *
-     * @param event событие инициализации
+     * Инициализация представления: установка списка доступных часовых поясов.
      */
     @Subscribe
     public void onInit(final InitEvent event) {
         timeZoneField.setItems(List.of(TimeZone.getAvailableIDs()));
-
-
     }
 
     /**
-     * Вызывается при создании новой сущности.
-     * Делает поля логина и пароля доступными для ввода.
-     *
-     * @param event событие инициализации сущности
+     * Инициализация новой сущности: делает доступными поля для ввода логина и пароля.
      */
     @Subscribe
     public void onInitEntity(final InitEntityEvent<UserEntity> event) {
@@ -109,30 +79,23 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     }
 
     /**
-     * Вызывается после загрузки данных в форму.
-     * При новом пользователе ставит фокус на логин,
-     * заполняет email/телефон, управляет видимостью кнопок подтверждения
-     * и восстанавливает ссылки из связанных сущностей.
-     *
-     * @param event событие готовности
+     * Вызывается после полной готовности представления:
+     * - ставит фокус на логин для новых пользователей,
+     * - заполняет поля email и телефона,
+     * - обновляет кнопки.
      */
     @Subscribe
     public void onReady(final ReadyEvent event) {
         if (entityStates.isNew(getEditedEntity())) {
             usernameField.focus();
         }
-        emailField.setValue(getEditedEntity().getEmail() != null ? getEditedEntity().getEmail().getEmail() : null);
-        confirmEmailButton.setVisible(getEditedEntity().getEmail() != null && !Boolean.TRUE.equals(getEditedEntity().getEmail().getConfirmed()));
-
+        emailField.setValue(getEditedEntity().getEmail() != null ? getEditedEntity().getEmail().getEmail() : "");
         phoneField.setTypedValue(getEditedEntity().getPhone() != null ? getEditedEntity().getPhone().getNumber() : null);
-        confirmPhoneButton.setVisible(getEditedEntity().getPhone() != null && !Boolean.TRUE.equals(getEditedEntity().getPhone().getConfirmed()));
+        updateButtonsVisibility();
     }
 
     /**
-     * Проверка валидности введённых данных.
-     * Убедиться, что пароли совпадают при создании нового пользователя.
-     *
-     * @param event событие валидации
+     * Проверяет совпадение паролей при создании нового пользователя.
      */
     @Subscribe
     public void onValidation(final ValidationEvent event) {
@@ -143,29 +106,19 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     }
 
     /**
-     * Выполняется перед сохранением пользователя.
-     * Шифрует новый пароль, обновляет email и телефон при изменении,
-     * очищает старые записи и создаёт новые сущности,
-     * а также сохраняет ссылки из поля контактов.
-     *
-     * @param event событие перед сохранением
+     * Перед сохранением кодирует пароль для нового пользователя.
      */
     @Subscribe
     protected void onBeforeSave(final BeforeSaveEvent event) {
         if (entityStates.isNew(getEditedEntity())) {
             getEditedEntity().setPassword(passwordEncoder.encode(passwordField.getValue()));
         }
-
     }
 
-
     /**
-     * Обработчик нажатия кнопки подтвердения email'a".
-     * Устанавливает флаг подтверждения email и сохраняет изменения.
-     *
-     * @param event событие клика
+     * Обработка клика по кнопке подтверждения email.
+     * Открывает диалог для ввода кода подтверждения.
      */
-
     @Subscribe("confirmEmailButton")
     public void onConfirmEmailClick(ClickEvent<Button> event) {
         uiUtils.openConfirmationDialog(
@@ -174,7 +127,9 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                 code -> {
                     try {
                         contactService.confirmEmail(getEditedEntity(), code);
-                        confirmEmailButton.setVisible(false); // подтверждён → скрываем
+                        reloadEditedEntity();
+                        updateButtonsVisibility();
+                        emailField.setValue(getEditedEntity().getEmail().getEmail());
                     } catch (RuntimeException ex) {
                         dialogs.createMessageDialog()
                                 .withHeader("Error")
@@ -184,19 +139,20 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                 },
                 () -> {
                     contactService.rollbackEmailChange(getEditedEntity());
-                    confirmEmailButton.setVisible(false); // откат → скрываем
-                    emailField.setValue(getEditedEntity().getEmail() != null
-                            ? getEditedEntity().getEmail().getEmail()
-                            : "");
+                    reloadEditedEntity();
+                    updateButtonsVisibility();
+                    emailField.setValue(
+                            getEditedEntity().getEmail() != null
+                                    ? getEditedEntity().getEmail().getEmail()
+                                    : ""
+                    );
                 }
         );
     }
 
     /**
-     * Обработчик нажатия кнопки Изменить для email'a.
-     * Делает поле email'a доступным для редактирования и показывает кнопки Сохранить/Отменить.
-     *
-     * @param event событие клика
+     * Обработка клика по кнопке "Редактировать email".
+     * Делает поле доступным для редактирования и показывает кнопки сохранения/отмены.
      */
     @Subscribe("editEmailButton")
     public void onEditEmailClick(ClickEvent<Button> event) {
@@ -207,12 +163,8 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     }
 
     /**
-     * Обработчик нажатия кнопки Сохранить для email'a.
-     * Блокирует редактирование поля email, обновляет сущность при изменении значения,
-     * скрывает кнопки Сохранить/Отменить, показывает кнопку редактирования
-     * и при необходимости отображает элементы подтверждения email'a.
-     *
-     * @param event событие клика
+     * Обработка клика по кнопке "Сохранить email".
+     * Запрашивает смену email и обновляет сущность.
      */
     @Subscribe("saveEmailButton")
     public void onSaveEmailClick(ClickEvent<Button> event) {
@@ -224,39 +176,33 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
         String newEmail = emailField.getValue();
         if (newEmail != null) {
             contactService.requestEmailChange(getEditedEntity(), newEmail);
-
-            if (getEditedEntity().getEmail() != null
-                    && Boolean.FALSE.equals(getEditedEntity().getEmail().getConfirmed())) {
-                confirmEmailButton.setVisible(true);
-            }
+            reloadEditedEntity();
+            updateButtonsVisibility();
         }
     }
 
     /**
-     * Обработчик нажатия кнопки «Отменить» для email.
-     * Возвращает исходное значение email, делает поле недоступным для редактирования
-     * и скрывает кнопки кнопки Сохранить/Отменить.
-     *
-     * @param event событие клика
+     * Обработка клика по кнопке "Отменить редактирование email".
+     * Возвращает прежнее значение и скрывает кнопки редактирования.
      */
     @Subscribe("cancelEmailButton")
     public void onCancelEmailClick(ClickEvent<Button> event) {
         if (getEditedEntity().getEmail() != null) {
             emailField.setValue(getEditedEntity().getEmail().getEmail());
+        } else {
+            emailField.setValue("");
         }
         emailField.setReadOnly(true);
         saveEmailButton.setVisible(false);
         cancelEmailButton.setVisible(false);
         editEmailButton.setVisible(true);
+        updateButtonsVisibility();
     }
 
     /**
-     * Обработчик нажатия кнопки подтвердения номера телефона.
-     * Устанавливает флаг подтверждения номера телефона и сохраняет изменения.
-     *
-     * @param event событие клика
+     * Обработка клика по кнопке подтверждения телефона.
+     * Открывает диалог для ввода кода подтверждения.
      */
-
     @Subscribe("confirmPhoneButton")
     public void onConfirmPhoneClick(ClickEvent<Button> event) {
         uiUtils.openConfirmationDialog(
@@ -265,7 +211,9 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                 code -> {
                     try {
                         contactService.confirmPhone(getEditedEntity(), code);
-                        confirmPhoneButton.setVisible(false); // подтверждён → скрываем
+                        reloadEditedEntity();
+                        updateButtonsVisibility();
+                        phoneField.setTypedValue(getEditedEntity().getPhone().getNumber()); // <--- обновляем UI
                     } catch (RuntimeException ex) {
                         dialogs.createMessageDialog()
                                 .withHeader("Error")
@@ -275,19 +223,20 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                 },
                 () -> {
                     contactService.rollbackPhoneChange(getEditedEntity());
-                    confirmPhoneButton.setVisible(false); // откат → скрываем
-                    phoneField.setValue(getEditedEntity().getPhone() != null
-                            ? String.valueOf(getEditedEntity().getPhone().getNumber())
-                            : "");
+                    reloadEditedEntity();
+                    updateButtonsVisibility();
+                    phoneField.setTypedValue(
+                            getEditedEntity().getPhone() != null
+                                    ? getEditedEntity().getPhone().getNumber()
+                                    : null
+                    );
                 }
         );
     }
 
     /**
-     * Обработчик нажатия кнопки Изменить для телефона.
-     * Делает поле телефона доступным для редактирования и показывает кнопки Сохранить/Отменить.
-     *
-     * @param event событие клика
+     * Обработка клика по кнопке "Редактировать телефон".
+     * Делает поле доступным для редактирования и показывает кнопки сохранения/отмены.
      */
     @Subscribe("editPhoneButton")
     public void onEditPhoneClick(ClickEvent<Button> event) {
@@ -298,11 +247,8 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     }
 
     /**
-     * Обработчик нажатия кнопки Сохранить для телефона.
-     * Делает поле телефона недоступным для редактирования, скрывает кнопки Сохранить/Отменить.
-     * и показывает кнопку подтверждения номера телефона.
-     *
-     * @param event событие клика
+     * Обработка клика по кнопке "Сохранить телефон".
+     * Запрашивает смену номера и обновляет сущность.
      */
     @Subscribe("savePhoneButton")
     public void onSavePhoneClick(ClickEvent<Button> event) {
@@ -314,39 +260,33 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
         Long newPhone = phoneField.getTypedValue();
         if (newPhone != null) {
             contactService.requestPhoneChange(getEditedEntity(), newPhone);
-
-            if (getEditedEntity().getPhone() != null
-                    && Boolean.FALSE.equals(getEditedEntity().getPhone().getConfirmed())) {
-                confirmPhoneButton.setVisible(true);
-            }
+            reloadEditedEntity();
+            updateButtonsVisibility();
         }
     }
 
-
     /**
-     * Обработчик нажатия кнопки Отменить для телефона.
-     * Возвращает исходное значение телефона, делает поле недоступным для редактирования
-     * и скрывает кнопки Сохранить/Отменить.
-     *
-     * @param event событие клика
+     * Обработка клика по кнопке "Отменить редактирование телефона".
+     * Возвращает прежнее значение и скрывает кнопки редактирования.
      */
     @Subscribe("cancelPhoneButton")
     public void onCancelPhoneClick(ClickEvent<Button> event) {
         if (getEditedEntity().getPhone() != null) {
-            phoneField.setValue(String.valueOf(getEditedEntity().getPhone().getNumber()));
+            phoneField.setTypedValue(getEditedEntity().getPhone().getNumber());
+        } else {
+            phoneField.setTypedValue(null);
         }
         phoneField.setReadOnly(true);
         savePhoneButton.setVisible(false);
         cancelPhoneButton.setVisible(false);
         editPhoneButton.setVisible(true);
+        updateButtonsVisibility();
     }
 
     /**
-     * Обработчик нажатия кнопки удаления аккаунта.
-     * Показывает диалог подтверждения, удаляет пользователя, завершает сессию
-     * и перенаправляет на страницу логина.
-     *
-     * @param event событие клика
+     * Обработка клика по кнопке "Удалить аккаунт".
+     * Показывает диалог подтверждения, при согласии удаляет пользователя
+     * и завершает сессию.
      */
     @Subscribe("removeAccountButton")
     public void onRemoveAccountButtonClick(ClickEvent<Button> event) {
@@ -366,4 +306,27 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                 .open();
     }
 
+    /**
+     * Обновляет видимость кнопок подтверждения email и телефона.
+     */
+    private void updateButtonsVisibility() {
+        confirmEmailButton.setVisible(
+                getEditedEntity().getEmail() != null
+                        && !Boolean.TRUE.equals(getEditedEntity().getEmail().getConfirmed())
+        );
+        confirmPhoneButton.setVisible(
+                getEditedEntity().getPhone() != null
+                        && !Boolean.TRUE.equals(getEditedEntity().getPhone().getConfirmed())
+        );
+    }
+
+    /**
+     * Перезагружает редактируемую сущность и обновляет контейнер.
+     */
+    private void reloadEditedEntity() {
+        UserEntity fresh = dataManager.load(UserEntity.class)
+                .id(getEditedEntity().getId())
+                .one();
+        getEditedEntityContainer().setItem((T) fresh);
+    }
 }

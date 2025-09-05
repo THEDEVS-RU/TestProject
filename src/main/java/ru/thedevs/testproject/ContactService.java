@@ -22,8 +22,6 @@ public class ContactService {
         this.dataManager = dataManager;
     }
 
-    // ------------------- EMAIL -------------------
-
     public void requestEmailChange(UserEntity user, String newEmail) {
         UserEntity managedUser = dataManager.load(UserEntity.class)
                 .id(user.getId())
@@ -43,21 +41,20 @@ public class ContactService {
     }
 
     public void confirmEmail(UserEntity user, String code) {
-        if (isValidEmailCode(code)) {
-            UserEntity managedUser = dataManager.load(UserEntity.class)
-                    .id(user.getId())
-                    .one();
+        if (!isValidEmailCode(code)) {
+            throw new RuntimeException("Неверный код подтверждения email");
+        }
+        UserEntity managedUser = dataManager.load(UserEntity.class)
+                .id(user.getId())
+                .one();
 
-            if (managedUser.getEmail() != null) {
-                managedUser.getEmail().setConfirmed(true);
-                dataManager.save(managedUser);
-                oldEmails.remove(user.getId());
-            }
-        } else {
-            throw new RuntimeException("WrongCode");
+        Email email = managedUser.getEmail();
+        if (email != null) {
+            email.setConfirmed(true);
+            dataManager.save(email);
+            oldEmails.remove(user.getId());
         }
     }
-
     public void rollbackEmailChange(UserEntity user) {
         UserEntity managedUser = dataManager.load(UserEntity.class)
                 .id(user.getId())
@@ -66,6 +63,7 @@ public class ContactService {
         Email current = managedUser.getEmail();
         if (current != null && !Boolean.TRUE.equals(current.getConfirmed())) {
             String oldEmail = oldEmails.get(managedUser.getId());
+
             if (oldEmail != null) {
                 Email restored = dataManager.create(Email.class);
                 restored.setEmail(oldEmail);
@@ -74,6 +72,7 @@ public class ContactService {
             } else {
                 managedUser.setEmail(null);
             }
+
             dataManager.save(managedUser);
             oldEmails.remove(managedUser.getId());
         }
@@ -82,8 +81,6 @@ public class ContactService {
     private boolean isValidEmailCode(String code) {
         return "1234".equals(code);
     }
-
-    // ------------------- PHONE -------------------
 
     public void requestPhoneChange(UserEntity user, Long newPhone) {
         UserEntity managedUser = dataManager.load(UserEntity.class)
@@ -104,18 +101,18 @@ public class ContactService {
     }
 
     public void confirmPhone(UserEntity user, String code) {
-        if (isValidPhoneCode(code)) {
-            UserEntity managedUser = dataManager.load(UserEntity.class)
-                    .id(user.getId())
-                    .one();
+        if (!isValidPhoneCode(code)) {
+            throw new RuntimeException("Неверный код подтверждения телефона");
+        }
+        UserEntity managedUser = dataManager.load(UserEntity.class)
+                .id(user.getId())
+                .one();
 
-            if (managedUser.getPhone() != null) {
-                managedUser.getPhone().setConfirmed(true);
-                dataManager.save(managedUser);
-                oldPhones.remove(user.getId());
-            }
-        } else {
-            throw new RuntimeException("WrongCode");
+        Phone phone = managedUser.getPhone();
+        if (phone != null) {
+            phone.setConfirmed(true);
+            dataManager.save(phone);
+            oldPhones.remove(user.getId());
         }
     }
 
@@ -127,6 +124,7 @@ public class ContactService {
         Phone current = managedUser.getPhone();
         if (current != null && !Boolean.TRUE.equals(current.getConfirmed())) {
             Long oldPhone = oldPhones.get(managedUser.getId());
+
             if (oldPhone != null) {
                 Phone restored = dataManager.create(Phone.class);
                 restored.setNumber(oldPhone);
@@ -135,6 +133,7 @@ public class ContactService {
             } else {
                 managedUser.setPhone(null);
             }
+
             dataManager.save(managedUser);
             oldPhones.remove(managedUser.getId());
         }
