@@ -41,6 +41,7 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     @Autowired private Dialogs dialogs;
     @Autowired private ContactService contactService;
     @Autowired private UiUtils uiUtils;
+    @Autowired private Messages messages;
 
     @ViewComponent private TypedTextField<String> usernameField;
     @ViewComponent private PasswordField passwordField;
@@ -101,7 +102,7 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     public void onValidation(final ValidationEvent event) {
         if (entityStates.isNew(getEditedEntity())
                 && !Objects.equals(passwordField.getValue(), confirmPasswordField.getValue())) {
-            event.getErrors().add("passwordsDoNotMatch");
+            event.getErrors().add(messages.getMessage("ru.thedevs.coreui.view.user/passwordsDoNotMatch"));
         }
     }
 
@@ -122,8 +123,8 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     @Subscribe("confirmEmailButton")
     public void onConfirmEmailClick(ClickEvent<Button> event) {
         uiUtils.openConfirmationDialog(
-                "ConfirmEmail",
-                "Введите код из письма, отправленного на новый email",
+                messages.getMessage("ru.thedevs.coreui.view.user/ConfirmEmail"),
+                messages.getMessage("ru.thedevs.coreui.view.user/EnterEmailCodeMessage"),
                 code -> {
                     try {
                         contactService.confirmEmail(getEditedEntity(), code);
@@ -132,7 +133,7 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                         emailField.setValue(getEditedEntity().getEmail().getEmail());
                     } catch (RuntimeException ex) {
                         dialogs.createMessageDialog()
-                                .withHeader("Error")
+                                .withHeader(messages.getMessage("ru.thedevs.coreui.view.user/Error"))
                                 .withText(ex.getMessage())
                                 .open();
                     }
@@ -174,7 +175,11 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
         editEmailButton.setVisible(true);
 
         String newEmail = emailField.getValue();
-        if (newEmail != null) {
+        String currentEmail = getEditedEntity().getEmail() != null
+                ? getEditedEntity().getEmail().getEmail()
+                : null;
+
+        if (newEmail != null && !newEmail.equals(currentEmail)) {
             contactService.requestEmailChange(getEditedEntity(), newEmail);
             reloadEditedEntity();
             updateButtonsVisibility();
@@ -206,17 +211,17 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     @Subscribe("confirmPhoneButton")
     public void onConfirmPhoneClick(ClickEvent<Button> event) {
         uiUtils.openConfirmationDialog(
-                "confirmPhone",
-                "confirmPhoneCaption",
+                messages.getMessage("ru.thedevs.coreui.view.user/ConfirmPhone"),
+                messages.getMessage("ru.thedevs.coreui.view.user/confirmPhoneCaption"),
                 code -> {
                     try {
                         contactService.confirmPhone(getEditedEntity(), code);
                         reloadEditedEntity();
                         updateButtonsVisibility();
-                        phoneField.setTypedValue(getEditedEntity().getPhone().getNumber()); // <--- обновляем UI
+                        phoneField.setTypedValue(getEditedEntity().getPhone().getNumber());
                     } catch (RuntimeException ex) {
                         dialogs.createMessageDialog()
-                                .withHeader("Error")
+                                .withHeader(messages.getMessage("ru.thedevs.coreui.view.user/Error"))
                                 .withText(ex.getMessage())
                                 .open();
                     }
@@ -258,7 +263,11 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
         editPhoneButton.setVisible(true);
 
         Long newPhone = phoneField.getTypedValue();
-        if (newPhone != null) {
+        Long currentPhone = getEditedEntity().getPhone() != null
+                ? getEditedEntity().getPhone().getNumber()
+                : null;
+
+        if (newPhone != null && !Objects.equals(newPhone, currentPhone)) {
             contactService.requestPhoneChange(getEditedEntity(), newPhone);
             reloadEditedEntity();
             updateButtonsVisibility();
@@ -292,8 +301,8 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     public void onRemoveAccountButtonClick(ClickEvent<Button> event) {
         UserEntity user = getEditedEntity();
         dialogs.createOptionDialog()
-                .withHeader("confirmAction")
-                .withText("deleteAccountQuestion")
+                .withHeader(messages.getMessage("ru.thedevs.coreui.view.user/ConfirmAction"))
+                .withText(messages.getMessage("ru.thedevs.coreui.view.user/DeleteAccountQuestion"))
                 .withActions(
                         new DialogAction(DialogAction.Type.YES).withHandler(e -> {
                             dataManager.remove(user);

@@ -1,6 +1,8 @@
 package ru.thedevs.testproject;
 
 import io.jmix.core.DataManager;
+import io.jmix.core.Messages;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import ru.thedevs.entities.Email;
 import ru.thedevs.entities.Phone;
@@ -12,6 +14,9 @@ import java.util.UUID;
 
 @Service
 public class ContactService {
+
+    @Autowired
+    private Messages messages;
 
     private final DataManager dataManager;
 
@@ -42,7 +47,7 @@ public class ContactService {
 
     public void confirmEmail(UserEntity user, String code) {
         if (!isValidEmailCode(code)) {
-            throw new RuntimeException("Неверный код подтверждения email");
+            throw new RuntimeException(messages.getMessage("ru.thedevs.coreui.view.user/WrongEmailCode"));
         }
         UserEntity managedUser = dataManager.load(UserEntity.class)
                 .id(user.getId())
@@ -102,7 +107,7 @@ public class ContactService {
 
     public void confirmPhone(UserEntity user, String code) {
         if (!isValidPhoneCode(code)) {
-            throw new RuntimeException("Неверный код подтверждения телефона");
+            throw new RuntimeException(messages.getMessage("ru.thedevs.coreui.view.user/WrongPhoneCode"));
         }
         UserEntity managedUser = dataManager.load(UserEntity.class)
                 .id(user.getId())

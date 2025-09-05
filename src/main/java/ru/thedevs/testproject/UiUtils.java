@@ -14,11 +14,13 @@ import com.vaadin.flow.server.StreamResource;
 import io.jmix.core.FileRef;
 import io.jmix.core.FileStorage;
 import io.jmix.core.FileStorageLocator;
+import io.jmix.core.Messages;
 import io.jmix.flowui.UiComponents;
 import io.jmix.flowui.ViewNavigators;
 import io.jmix.flowui.component.UiComponentUtils;
 import io.jmix.flowui.kit.component.button.JmixButton;
 import io.jmix.flowui.view.View;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import ru.thedevs.entities.UserEntity;
 import ru.thedevs.entities.marker.ICoreEntity;
@@ -31,6 +33,9 @@ import java.util.function.Consumer;
 
 @Component("tp_UiUtils")
 public class UiUtils {
+
+    @Autowired
+    private Messages messages;
 
     public static final String AVATAR_ID = "avatar";
     public static final String PROFILE_ID = "profile";
@@ -106,7 +111,7 @@ public class UiUtils {
         if (user == null) {
             return null;
         }
-        JmixButton button =  getDefaultButton(null, "tertiary-inline",
+        JmixButton button = getDefaultButton(null, "tertiary-inline",
                 user.getDisplayedName(), e -> openDetail(user));
         button.setId(PROFILE_ID);
         return button;
@@ -160,17 +165,17 @@ public class UiUtils {
         layout.add(new Span(message));
 
         TextField codeField = uiComponents.create(TextField.class);
-        codeField.setLabel("codeFieldLabel");
+        codeField.setLabel(messages.getMessage("ru.thedevs.coreui.view.user/CodeFieldLabel"));
         layout.add(codeField);
 
         HorizontalLayout buttons = new HorizontalLayout();
 
-        Button confirmButton = new Button("ConfirmBtn", e -> {
+        Button confirmButton = new Button(messages.getMessage("ru.thedevs.coreui.view.user/ConfirmBtn"), e -> {
             dialog.close();
             onConfirm.accept(codeField.getValue());
         });
 
-        Button cancelButton = new Button("CancelBtn", e -> {
+        Button cancelButton = new Button(messages.getMessage("ru.thedevs.coreui.view.user/CancelBtn"), e -> {
             dialog.close();
             if (onCancel != null) {
                 onCancel.run();
