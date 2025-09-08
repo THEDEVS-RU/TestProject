@@ -6,146 +6,37 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import ru.thedevs.entities.Email;
 import ru.thedevs.entities.Phone;
-import ru.thedevs.entities.UserEntity;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
 
 @Service
 public class ContactService {
 
     @Autowired
     private Messages messages;
+    @Autowired
+    private DataManager dataManager;
 
-    private final DataManager dataManager;
-
-    private final Map<UUID, String> oldEmails = new HashMap<>();
-    private final Map<UUID, Long> oldPhones = new HashMap<>();
-
-    public ContactService(DataManager dataManager) {
-        this.dataManager = dataManager;
+    public Email createNewEmail(String newEmail) {
+        Email email = dataManager.create(Email.class);
+        email.setEmail(newEmail);
+        email.setConfirmed(false);
+        return email;
     }
 
-    public void requestEmailChange(UserEntity user, String newEmail) {
-        UserEntity managedUser = dataManager.load(UserEntity.class)
-                .id(user.getId())
-                .one();
-
-        Email current = managedUser.getEmail();
-        if (current != null) {
-            oldEmails.put(managedUser.getId(), current.getEmail());
-        }
-
-        Email newEmailEntity = dataManager.create(Email.class);
-        newEmailEntity.setEmail(newEmail);
-        newEmailEntity.setConfirmed(false);
-
-        managedUser.setEmail(newEmailEntity);
-        dataManager.save(managedUser);
-    }
-
-    public void confirmEmail(UserEntity user, String code) {
-        if (!isValidEmailCode(code)) {
-            throw new RuntimeException(messages.getMessage("ru.thedevs.coreui.view.user/WrongEmailCode"));
-        }
-        UserEntity managedUser = dataManager.load(UserEntity.class)
-                .id(user.getId())
-                .one();
-
-        Email email = managedUser.getEmail();
-        if (email != null) {
-            email.setConfirmed(true);
-            dataManager.save(email);
-            oldEmails.remove(user.getId());
-        }
-    }
-    public void rollbackEmailChange(UserEntity user) {
-        UserEntity managedUser = dataManager.load(UserEntity.class)
-                .id(user.getId())
-                .one();
-
-        Email current = managedUser.getEmail();
-        if (current != null && !Boolean.TRUE.equals(current.getConfirmed())) {
-            String oldEmail = oldEmails.get(managedUser.getId());
-
-            if (oldEmail != null) {
-                Email restored = dataManager.create(Email.class);
-                restored.setEmail(oldEmail);
-                restored.setConfirmed(true);
-                managedUser.setEmail(restored);
-            } else {
-                managedUser.setEmail(null);
-            }
-
-            dataManager.save(managedUser);
-            oldEmails.remove(managedUser.getId());
-        }
-    }
-
-    private boolean isValidEmailCode(String code) {
+    public boolean isValidEmailCode(String code) {
         return "1234".equals(code);
     }
 
-    public void requestPhoneChange(UserEntity user, Long newPhone) {
-        UserEntity managedUser = dataManager.load(UserEntity.class)
-                .id(user.getId())
-                .one();
-
-        Phone current = managedUser.getPhone();
-        if (current != null) {
-            oldPhones.put(managedUser.getId(), current.getNumber());
-        }
-
-        Phone newPhoneEntity = dataManager.create(Phone.class);
-        newPhoneEntity.setNumber(newPhone);
-        newPhoneEntity.setConfirmed(false);
-
-        managedUser.setPhone(newPhoneEntity);
-        dataManager.save(managedUser);
+    public Phone createNewPhone(Long newPhone) {
+        Phone phone = dataManager.create(Phone.class);
+        phone.setNumber(newPhone);
+        phone.setConfirmed(false);
+        return phone;
     }
 
-    public void confirmPhone(UserEntity user, String code) {
-        if (!isValidPhoneCode(code)) {
-            throw new RuntimeException(messages.getMessage("ru.thedevs.coreui.view.user/WrongPhoneCode"));
-        }
-        UserEntity managedUser = dataManager.load(UserEntity.class)
-                .id(user.getId())
-                .one();
-
-        Phone phone = managedUser.getPhone();
-        if (phone != null) {
-            phone.setConfirmed(true);
-            dataManager.save(phone);
-            oldPhones.remove(user.getId());
-        }
-    }
-
-    public void rollbackPhoneChange(UserEntity user) {
-        UserEntity managedUser = dataManager.load(UserEntity.class)
-                .id(user.getId())
-                .one();
-
-        Phone current = managedUser.getPhone();
-        if (current != null && !Boolean.TRUE.equals(current.getConfirmed())) {
-            Long oldPhone = oldPhones.get(managedUser.getId());
-
-            if (oldPhone != null) {
-                Phone restored = dataManager.create(Phone.class);
-                restored.setNumber(oldPhone);
-                restored.setConfirmed(true);
-                managedUser.setPhone(restored);
-            } else {
-                managedUser.setPhone(null);
-            }
-
-            dataManager.save(managedUser);
-            oldPhones.remove(managedUser.getId());
-        }
-    }
-
-    private boolean isValidPhoneCode(String code) {
+    public boolean isValidPhoneCode(String code) {
         return "5678".equals(code);
     }
 }
+
+
 
