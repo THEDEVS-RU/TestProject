@@ -3,6 +3,8 @@ package ru.thedevs.testproject.view.user;
 import com.vaadin.flow.component.ClickEvent;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.combobox.ComboBox;
+import com.vaadin.flow.component.dialog.Dialog;
+import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
@@ -11,6 +13,7 @@ import io.jmix.core.DataManager;
 import io.jmix.core.EntityStates;
 import io.jmix.core.Messages;
 import io.jmix.flowui.Dialogs;
+import io.jmix.flowui.UiComponents;
 import io.jmix.flowui.action.DialogAction;
 import io.jmix.flowui.component.checkbox.JmixCheckbox;
 import io.jmix.flowui.component.textfield.TypedTextField;
@@ -51,6 +54,8 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     private UiUtils uiUtils;
     @Autowired
     private Messages messages;
+    @Autowired
+    private UiComponents uiComponents;
 
     @ViewComponent
     private TypedTextField<String> usernameField;
@@ -126,10 +131,16 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
 
     @Subscribe("confirmEmailButton")
     public void onConfirmEmailClick(ClickEvent<Button> event) {
-        uiUtils.openConfirmationDialog(
+        Email oldEmailValue = getEditedEntity().getEmail();
+        // создаём поле для ввода кода
+        TextField codeField = uiComponents.create(TextField.class);
+        codeField.setLabel(messages.getMessage("ru.thedevs.coreui.view.user/CodeFieldLabel"));
+
+        // создаём базовый диалог
+        Dialog dialog = uiUtils.getDefaultDialog(
                 messages.getMessage("ru.thedevs.coreui.view.user/ConfirmEmail"),
-                messages.getMessage("ru.thedevs.coreui.view.user/EnterEmailCodeMessage"),
-                code -> {
+                () -> {
+                    String code = codeField.getValue();
                     if (contactService.isValidEmailCode(code)) {
                         getEditedEntity().getEmail().setConfirmed(true);
                         updateButtonsVisibility();
@@ -144,13 +155,19 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                 () -> {
                     if (getEditedEntity().getEmail() != null
                             && !Boolean.TRUE.equals(getEditedEntity().getEmail().getConfirmed())) {
-                        getEditedEntity().setEmail(null);
+                        getEditedEntity().setEmail(oldEmailValue);
                         emailField.setValue("");
                         updateButtonsVisibility();
                     }
                 }
         );
+
+        // добавляем поле кода явно
+        ((VerticalLayout) dialog.getChildren().findFirst().get()).addComponentAtIndex(1, codeField);
+
+        dialog.open();
     }
+
 
     @Subscribe("editEmailButton")
     public void onEditEmailClick(ClickEvent<Button> event) {
@@ -195,10 +212,17 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
 
     @Subscribe("confirmPhoneButton")
     public void onConfirmPhoneClick(ClickEvent<Button> event) {
-        uiUtils.openConfirmationDialog(
+        Phone oldPhoneValue = getEditedEntity().getPhone();
+
+        // создаём поле для ввода кода
+        TextField codeField = uiComponents.create(TextField.class);
+        codeField.setLabel(messages.getMessage("ru.thedevs.coreui.view.user/CodeFieldLabel"));
+
+        // создаём базовый диалог
+        Dialog dialog = uiUtils.getDefaultDialog(
                 messages.getMessage("ru.thedevs.coreui.view.user/ConfirmPhone"),
-                messages.getMessage("ru.thedevs.coreui.view.user/confirmPhoneCaption"),
-                code -> {
+                () -> {
+                    String code = codeField.getValue();
                     if (contactService.isValidPhoneCode(code)) {
                         getEditedEntity().getPhone().setConfirmed(true);
                         updateButtonsVisibility();
@@ -213,13 +237,19 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                 () -> {
                     if (getEditedEntity().getPhone() != null
                             && !Boolean.TRUE.equals(getEditedEntity().getPhone().getConfirmed())) {
-                        getEditedEntity().setPhone(null);
+                        getEditedEntity().setPhone(oldPhoneValue);
                         phoneField.setTypedValue(null);
                         updateButtonsVisibility();
                     }
                 }
         );
+
+        // добавляем поле кода явно
+        ((VerticalLayout) dialog.getChildren().findFirst().get()).addComponentAtIndex(1, codeField);
+
+        dialog.open();
     }
+
 
     @Subscribe("editPhoneButton")
     public void onEditPhoneClick(ClickEvent<Button> event) {

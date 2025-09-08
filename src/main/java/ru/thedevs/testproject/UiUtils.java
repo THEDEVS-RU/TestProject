@@ -9,7 +9,6 @@ import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.server.StreamResource;
 import io.jmix.core.FileRef;
 import io.jmix.core.FileStorage;
@@ -150,10 +149,9 @@ public class UiUtils {
                 .navigate();
     }
 
-    public void openConfirmationDialog(
+    public Dialog getDefaultDialog(
             String title,
-            String message,
-            Consumer<String> onConfirm,
+            Runnable onSave,
             Runnable onCancel
     ) {
         Dialog dialog = uiComponents.create(Dialog.class);
@@ -162,30 +160,35 @@ public class UiUtils {
         dialog.setCloseOnOutsideClick(false);
 
         VerticalLayout layout = new VerticalLayout();
-        layout.add(new Span(message));
-
-        TextField codeField = uiComponents.create(TextField.class);
-        codeField.setLabel(messages.getMessage("ru.thedevs.coreui.view.user/CodeFieldLabel"));
-        layout.add(codeField);
+        layout.add(new Span(title));
 
         HorizontalLayout buttons = new HorizontalLayout();
 
-        Button confirmButton = new Button(messages.getMessage("ru.thedevs.coreui.view.user/ConfirmBtn"), e -> {
-            dialog.close();
-            onConfirm.accept(codeField.getValue());
-        });
+        Button saveButton = new Button(
+                messages.getMessage("ru.thedevs.coreui.view.user/ConfirmBtn"),
+                e -> {
+                    dialog.close();
+                    if (onSave != null) {
+                        onSave.run();
+                    }
+                }
+        );
 
-        Button cancelButton = new Button(messages.getMessage("ru.thedevs.coreui.view.user/CancelBtn"), e -> {
-            dialog.close();
-            if (onCancel != null) {
-                onCancel.run();
-            }
-        });
+        Button cancelButton = new Button(
+                messages.getMessage("ru.thedevs.coreui.view.user/CancelBtn"),
+                e -> {
+                    dialog.close();
+                    if (onCancel != null) {
+                        onCancel.run();
+                    }
+                }
+        );
 
-        buttons.add(confirmButton, cancelButton);
+        buttons.add(saveButton, cancelButton);
         layout.add(buttons);
 
         dialog.add(layout);
-        dialog.open();
+        return dialog;
     }
 }
+
