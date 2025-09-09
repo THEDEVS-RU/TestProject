@@ -7,6 +7,7 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.server.StreamResource;
@@ -155,14 +156,28 @@ public class UiUtils {
             Runnable onCancel
     ) {
         Dialog dialog = uiComponents.create(Dialog.class);
+        dialog.setWidth("420px");
         dialog.setModal(true);
         dialog.setCloseOnEsc(false);
         dialog.setCloseOnOutsideClick(false);
 
         VerticalLayout layout = new VerticalLayout();
-        layout.add(new Span(title));
+        layout.setWidthFull();
+        layout.setSpacing(true);
+        layout.setPadding(true);
+
+// выравниваем всё содержимое по центру
+        layout.setDefaultHorizontalComponentAlignment(FlexComponent.Alignment.CENTER);
+
+        Span titleLabel = new Span(title);
+        titleLabel.getStyle().set("font-weight", "bold");
+        titleLabel.getStyle().set("text-align", "center"); // сам текст тоже по центру
+        titleLabel.setWidthFull();
+        layout.add(titleLabel);
 
         HorizontalLayout buttons = new HorizontalLayout();
+        buttons.setWidthFull();
+        buttons.setJustifyContentMode(FlexComponent.JustifyContentMode.CENTER); // кнопки тоже по центру
 
         Button saveButton = new Button(
                 messages.getMessage("ru.thedevs.coreui.view.user/ConfirmBtn"),
@@ -189,6 +204,7 @@ public class UiUtils {
 
         dialog.add(layout);
         return dialog;
+
     }
 }
 

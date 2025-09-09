@@ -69,8 +69,6 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     private MessageBundle messageBundle;
     @ViewComponent
     private TextField emailField;
-    @ViewComponent
-    private Button confirmEmailButton;
     @ViewComponent("phoneField")
     private TypedTextField<Long> phoneField;
     @ViewComponent
@@ -78,19 +76,13 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     @ViewComponent
     private JmixCheckbox activeField;
     @ViewComponent
-    private Button confirmPhoneButton;
-    @ViewComponent
     private Button editEmailButton;
     @ViewComponent
     private Button saveEmailButton;
     @ViewComponent
-    private Button cancelEmailButton;
-    @ViewComponent
     private Button editPhoneButton;
     @ViewComponent
     private Button savePhoneButton;
-    @ViewComponent
-    private Button cancelPhoneButton;
 
     @Subscribe
     public void onInit(final InitEvent event) {
@@ -129,52 +121,12 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
         }
     }
 
-    @Subscribe("confirmEmailButton")
-    public void onConfirmEmailClick(ClickEvent<Button> event) {
-        Email oldEmailValue = getEditedEntity().getEmail();
-        // создаём поле для ввода кода
-        TextField codeField = uiComponents.create(TextField.class);
-        codeField.setLabel(messages.getMessage("ru.thedevs.coreui.view.user/CodeFieldLabel"));
-
-        // создаём базовый диалог
-        Dialog dialog = uiUtils.getDefaultDialog(
-                messages.getMessage("ru.thedevs.coreui.view.user/ConfirmEmail"),
-                () -> {
-                    String code = codeField.getValue();
-                    if (contactService.isValidEmailCode(code)) {
-                        getEditedEntity().getEmail().setConfirmed(true);
-                        updateButtonsVisibility();
-                        emailField.setValue(getEditedEntity().getEmail().getEmail());
-                    } else {
-                        dialogs.createMessageDialog()
-                                .withHeader(messages.getMessage("ru.thedevs.coreui.view.user/Error"))
-                                .withText(messages.getMessage("ru.thedevs.coreui.view.user/WrongEmailCode"))
-                                .open();
-                    }
-                },
-                () -> {
-                    if (getEditedEntity().getEmail() != null
-                            && !Boolean.TRUE.equals(getEditedEntity().getEmail().getConfirmed())) {
-                        getEditedEntity().setEmail(oldEmailValue);
-                        emailField.setValue("");
-                        updateButtonsVisibility();
-                    }
-                }
-        );
-
-        // добавляем поле кода явно
-        ((VerticalLayout) dialog.getChildren().findFirst().get()).addComponentAtIndex(1, codeField);
-
-        dialog.open();
-    }
-
-
+    // === EMAIL ===
     @Subscribe("editEmailButton")
     public void onEditEmailClick(ClickEvent<Button> event) {
         emailField.setReadOnly(false);
         editEmailButton.setVisible(false);
         saveEmailButton.setVisible(true);
-        cancelEmailButton.setVisible(true);
     }
 
     @Subscribe("saveEmailButton")
@@ -184,79 +136,74 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                 ? getEditedEntity().getEmail().getEmail()
                 : null;
 
-        if (newEmail != null && !newEmail.equals(currentEmail)) {
+        if (newEmail == null || newEmail.trim().isEmpty()) {
+            emailField.setValue(currentEmail != null ? currentEmail : "");
+            emailField.setReadOnly(true);
+            saveEmailButton.setVisible(false);
+            editEmailButton.setVisible(true);
+            updateButtonsVisibility();
+            return;
+        }
+
+        if (!newEmail.equals(currentEmail)) {
             Email newEmailEntity = contactService.createNewEmail(newEmail);
             getEditedEntity().setEmail(newEmailEntity);
-            updateButtonsVisibility();
-        }
 
-        emailField.setReadOnly(true);
-        saveEmailButton.setVisible(false);
-        cancelEmailButton.setVisible(false);
-        editEmailButton.setVisible(true);
-    }
+            TextField codeField = uiComponents.create(TextField.class);
+            codeField.setLabel(messages.getMessage("ru.thedevs.coreui.view.user/CodeFieldLabel"));
+            codeField.setHelperText(
+                    messages.formatMessage(
+                            getClass(),
+                            messages.getMessage("ru.thedevs.coreui.view.user/EnterEmailCodeMessage") +
+                                    newEmail
+                    )
+            );
 
-    @Subscribe("cancelEmailButton")
-    public void onCancelEmailClick(ClickEvent<Button> event) {
-        if (getEditedEntity().getEmail() != null) {
-            emailField.setValue(getEditedEntity().getEmail().getEmail());
-        } else {
-            emailField.setValue("");
-        }
-        emailField.setReadOnly(true);
-        saveEmailButton.setVisible(false);
-        cancelEmailButton.setVisible(false);
-        editEmailButton.setVisible(true);
-        updateButtonsVisibility();
-    }
+            codeField.getStyle().set("font-size", "1.3em");    // увеличит текст внутри
+            codeField.getStyle().set("padding", "8px");        // больше отступы
 
-    @Subscribe("confirmPhoneButton")
-    public void onConfirmPhoneClick(ClickEvent<Button> event) {
-        Phone oldPhoneValue = getEditedEntity().getPhone();
 
-        // создаём поле для ввода кода
-        TextField codeField = uiComponents.create(TextField.class);
-        codeField.setLabel(messages.getMessage("ru.thedevs.coreui.view.user/CodeFieldLabel"));
-
-        // создаём базовый диалог
-        Dialog dialog = uiUtils.getDefaultDialog(
-                messages.getMessage("ru.thedevs.coreui.view.user/ConfirmPhone"),
-                () -> {
-                    String code = codeField.getValue();
-                    if (contactService.isValidPhoneCode(code)) {
-                        getEditedEntity().getPhone().setConfirmed(true);
-                        updateButtonsVisibility();
-                        phoneField.setTypedValue(getEditedEntity().getPhone().getNumber());
-                    } else {
-                        dialogs.createMessageDialog()
-                                .withHeader(messages.getMessage("ru.thedevs.coreui.view.user/Error"))
-                                .withText(messages.getMessage("ru.thedevs.coreui.view.user/WrongPhoneCode"))
-                                .open();
-                    }
-                },
-                () -> {
-                    if (getEditedEntity().getPhone() != null
-                            && !Boolean.TRUE.equals(getEditedEntity().getPhone().getConfirmed())) {
-                        getEditedEntity().setPhone(oldPhoneValue);
-                        phoneField.setTypedValue(null);
+            Dialog dialog = uiUtils.getDefaultDialog(
+                    messages.getMessage("ru.thedevs.coreui.view.user/ConfirmEmail"),
+                    () -> {
+                        String code = codeField.getValue();
+                        if (contactService.isValidEmailCode(code)) {
+                            getEditedEntity().getEmail().setConfirmed(true);
+                            emailField.setValue(newEmail);
+                            emailField.setReadOnly(true);
+                            saveEmailButton.setVisible(false);
+                            editEmailButton.setVisible(true);
+                            updateButtonsVisibility();
+                        } else {
+                            dialogs.createMessageDialog()
+                                    .withHeader(messages.getMessage("ru.thedevs.coreui.view.user/Error"))
+                                    .withText(messages.getMessage("ru.thedevs.coreui.view.user/WrongEmailCode"))
+                                    .open();
+                        }
+                    },
+                    () -> {
+                        getEditedEntity().setEmail(currentEmail != null
+                                ? contactService.createNewEmail(currentEmail)
+                                : null);
+                        emailField.setValue(currentEmail != null ? currentEmail : "");
+                        emailField.setReadOnly(true);
+                        saveEmailButton.setVisible(false);
+                        editEmailButton.setVisible(true);
                         updateButtonsVisibility();
                     }
-                }
-        );
+            );
 
-        // добавляем поле кода явно
-        ((VerticalLayout) dialog.getChildren().findFirst().get()).addComponentAtIndex(1, codeField);
-
-        dialog.open();
+            ((VerticalLayout) dialog.getChildren().findFirst().get()).addComponentAtIndex(1, codeField);
+            dialog.open();
+        }
     }
 
-
+    // === PHONE ===
     @Subscribe("editPhoneButton")
     public void onEditPhoneClick(ClickEvent<Button> event) {
         phoneField.setReadOnly(false);
         editPhoneButton.setVisible(false);
         savePhoneButton.setVisible(true);
-        cancelPhoneButton.setVisible(true);
     }
 
     @Subscribe("savePhoneButton")
@@ -266,30 +213,67 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
                 ? getEditedEntity().getPhone().getNumber()
                 : null;
 
-        if (newPhone != null && !Objects.equals(newPhone, currentPhone)) {
+        if (newPhone == null) {
+            phoneField.setTypedValue(currentPhone);
+            phoneField.setReadOnly(true);
+            savePhoneButton.setVisible(false);
+            editPhoneButton.setVisible(true);
+            updateButtonsVisibility();
+            return;
+        }
+
+        if (!Objects.equals(newPhone, currentPhone)) {
             Phone newPhoneEntity = contactService.createNewPhone(newPhone);
             getEditedEntity().setPhone(newPhoneEntity);
-            updateButtonsVisibility();
-        }
 
-        phoneField.setReadOnly(true);
-        savePhoneButton.setVisible(false);
-        cancelPhoneButton.setVisible(false);
-        editPhoneButton.setVisible(true);
-    }
+            TextField codeField = uiComponents.create(TextField.class);
+            codeField.setLabel(messages.getMessage("ru.thedevs.coreui.view.user/CodeFieldLabel"));
+            codeField.setHelperText(
+                    messages.formatMessage(
+                            getClass(),
+                            messages.getMessage("ru.thedevs.coreui.view.user/confirmPhoneCaption") +
+                                    String.valueOf(newPhone)
+                    )
+            );
 
-    @Subscribe("cancelPhoneButton")
-    public void onCancelPhoneClick(ClickEvent<Button> event) {
-        if (getEditedEntity().getPhone() != null) {
-            phoneField.setTypedValue(getEditedEntity().getPhone().getNumber());
-        } else {
-            phoneField.setTypedValue(null);
+            codeField.getStyle().set("font-size", "1.3em");    // увеличит текст внутри
+            codeField.getStyle().set("padding", "8px");        // больше отступы
+            // поле визуально выше
+
+
+            Dialog dialog = uiUtils.getDefaultDialog(
+                    messages.getMessage("ru.thedevs.coreui.view.user/ConfirmPhone"),
+                    () -> {
+                        String code = codeField.getValue();
+                        if (contactService.isValidPhoneCode(code)) {
+                            getEditedEntity().getPhone().setConfirmed(true);
+                            phoneField.setTypedValue(newPhone);
+                            phoneField.setReadOnly(true);
+                            savePhoneButton.setVisible(false);
+                            editPhoneButton.setVisible(true);
+                            updateButtonsVisibility();
+                        } else {
+                            dialogs.createMessageDialog()
+                                    .withHeader(messages.getMessage("ru.thedevs.coreui.view.user/Error"))
+                                    .withText(messages.getMessage("ru.thedevs.coreui.view.user/WrongPhoneCode"))
+                                    .open();
+                        }
+                    },
+                    () -> {
+                        getEditedEntity().setPhone(currentPhone != null
+                                ? contactService.createNewPhone(currentPhone)
+                                : null);
+                        phoneField.setTypedValue(currentPhone);
+                        phoneField.setReadOnly(true);
+                        savePhoneButton.setVisible(false);
+                        editPhoneButton.setVisible(true);
+                        updateButtonsVisibility();
+                    }
+            );
+
+            ((VerticalLayout) dialog.getChildren().findFirst().get()).addComponentAtIndex(1, codeField);
+            dialog.open();
         }
-        phoneField.setReadOnly(true);
-        savePhoneButton.setVisible(false);
-        cancelPhoneButton.setVisible(false);
-        editPhoneButton.setVisible(true);
-        updateButtonsVisibility();
     }
 
     @Subscribe("removeAccountButton")
@@ -311,13 +295,26 @@ public class UserDetailView<T extends UserEntity> extends StandardDetailView<T> 
     }
 
     private void updateButtonsVisibility() {
-        confirmEmailButton.setVisible(
-                getEditedEntity().getEmail() != null
-                        && !Boolean.TRUE.equals(getEditedEntity().getEmail().getConfirmed())
-        );
-        confirmPhoneButton.setVisible(
-                getEditedEntity().getPhone() != null
-                        && !Boolean.TRUE.equals(getEditedEntity().getPhone().getConfirmed())
-        );
+        // Email
+        if (getEditedEntity().getEmail() == null) {
+            emailField.setReadOnly(false);
+            saveEmailButton.setVisible(true);
+            editEmailButton.setVisible(false);
+        } else {
+            emailField.setReadOnly(true);
+            saveEmailButton.setVisible(false);
+            editEmailButton.setVisible(true);
+        }
+
+        // Phone
+        if (getEditedEntity().getPhone() == null) {
+            phoneField.setReadOnly(false);
+            savePhoneButton.setVisible(true);
+            editPhoneButton.setVisible(false);
+        } else {
+            phoneField.setReadOnly(true);
+            savePhoneButton.setVisible(false);
+            editPhoneButton.setVisible(true);
+        }
     }
 }
