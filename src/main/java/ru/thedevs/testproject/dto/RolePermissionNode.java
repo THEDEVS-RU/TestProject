@@ -10,7 +10,7 @@ public class RolePermissionNode {
     private ResourcePolicy policy;
 
     @JmixProperty
-    private boolean enabled = true;
+    private Boolean enabled = true;
 
     public RolePermissionNode(ResourcePolicy policy) {
         this.policy = policy;
@@ -35,11 +35,11 @@ public class RolePermissionNode {
         return policy;
     }
 
-    public boolean isEnabled() {
+    public Boolean isEnabled() {
         return enabled;
     }
 
-    public void setEnabled(boolean enabled) {
+    public void setEnabled(Boolean enabled) {
         this.enabled = enabled;
     }
 }

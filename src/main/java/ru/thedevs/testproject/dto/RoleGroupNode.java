@@ -1,13 +1,11 @@
 package ru.thedevs.testproject.dto;
 
-import io.jmix.core.metamodel.annotation.JmixEntity;
 import io.jmix.core.metamodel.annotation.JmixProperty;
 import io.jmix.security.model.ResourceRole;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@JmixEntity(name = "sec_RoleGroupNode")
 public class RoleGroupNode {
 
     @JmixProperty
