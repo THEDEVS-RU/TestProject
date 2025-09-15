@@ -2,11 +2,6 @@
       title="Roles"
       focusComponent="entitiesTree">
 
-    <data readOnly="true">
-        <collection id="entitiesDc"
-                    class="ru.thedevs.testproject.dto.RoleGroupNode"/>
-    </data>
-
     <facets>
         <settings auto="true"/>
     </facets>
@@ -16,20 +11,22 @@
         <action id="discardAction" type="lookup_discard"/>
     </actions>
 
+    <data>
+        <collection id="entitiesDc"
+                    class="ru.thedevs.testproject.dto.RoleTreeNode"/>
+    </data>
+
     <layout expand="entitiesTree">
 
-        <!-- 🔍 Фильтр по имени роли -->
         <textField id="nameFilter"
                    placeholder="Поиск по имени роли..."
                    width="100%"/>
 
-        <!-- 🔽 Фильтр по категории -->
         <comboBox id="categoryFilter"
                   placeholder="Категория"
                   clearButtonVisible="true"
                   width="100%"/>
 
-        <!-- 🌳 TreeDataGrid для ролей и их политик -->
         <treeDataGrid id="entitiesTree"
                       dataContainer="entitiesDc"
                       hierarchyProperty="children"
@@ -38,20 +35,11 @@
                       minHeight="30em">
 
             <columns>
-                <column property="enabled"
-                        header="Вкл"
-                        editable="true"/>
-
-                <column property="name"
-                        header="Название"/>
-
-                <column property="category"
-                        header="Категория"
-                        editable="true"/>
+                <column property="enabled" header="Вкл" editable="true"/>
+                <column property="name" header="Название"/>
+                <column property="category" header="Категория" editable="true"/>
             </columns>
         </treeDataGrid>
-
-
 
         <hbox id="lookupActions" visible="false">
             <button id="selectBtn" action="selectAction"/>
@@ -59,3 +47,4 @@
         </hbox>
     </layout>
 </view>
+

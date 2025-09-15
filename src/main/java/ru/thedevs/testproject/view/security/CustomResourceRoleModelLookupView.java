@@ -2,15 +2,12 @@ package ru.thedevs.testproject.view.security;
 
 import com.vaadin.flow.component.HasValue;
 import com.vaadin.flow.router.Route;
-import io.jmix.flowui.UiComponents;
 import io.jmix.flowui.model.CollectionContainer;
 import io.jmix.flowui.view.*;
 import io.jmix.security.model.ResourceRoleModel;
 import io.jmix.security.role.ResourceRoleRepository;
-import io.jmix.security.model.RoleModelConverter;
 import org.springframework.beans.factory.annotation.Autowired;
-import ru.thedevs.testproject.dto.RoleGroupNode;
-import ru.thedevs.testproject.dto.RolePermissionNode;
+import ru.thedevs.testproject.dto.RoleTreeNode;
 import ru.thedevs.testproject.view.main.MainView;
 
 import java.util.List;
@@ -24,15 +21,10 @@ import java.util.stream.Collectors;
 public class CustomResourceRoleModelLookupView extends StandardListView<ResourceRoleModel> {
 
     @ViewComponent
-    private CollectionContainer<RoleGroupNode> entitiesDc;
-
+    private CollectionContainer<RoleTreeNode> entitiesDc;
 
     @Autowired
     private ResourceRoleRepository roleRepository;
-    @Autowired
-    private RoleModelConverter roleModelConverter;
-    @Autowired
-    private UiComponents uiComponents;
 
     private String nameFilterText = "";
     private String selectedCategory = null;
@@ -43,33 +35,41 @@ public class CustomResourceRoleModelLookupView extends StandardListView<Resource
     }
 
     private void loadRoles() {
-        List<RoleGroupNode> roles = roleRepository.getAllRoles().stream()
+        List<RoleTreeNode> roles = roleRepository.getAllRoles().stream()
                 .map(role -> {
-                    RoleGroupNode node = new RoleGroupNode(role.getName(), role);
-                    role.getResourcePolicies().forEach(p ->
-                            node.getChildren().add(new RolePermissionNode(p))
-                    );
-                    return node;
+                    String category = role.getCustomProperties()
+                            .getOrDefault("category", "Общая");
+                    RoleTreeNode group = RoleTreeNode.group(role.getName(), category);
+
+                    List<RoleTreeNode> children = role.getResourcePolicies().stream()
+                            .map(p -> RoleTreeNode.permission(
+                                    p.getAction(),
+                                    p.getResource(),
+                                    p.getType()
+                            ))
+                            .collect(Collectors.toList());
+
+                    group.setChildren(children);
+                    return group;
                 })
                 .filter(r -> nameFilterText.isEmpty() ||
                         r.getName().toLowerCase().contains(nameFilterText.toLowerCase()))
                 .filter(r -> selectedCategory == null || selectedCategory.equals(r.getCategory()))
                 .collect(Collectors.toList());
 
-        entitiesDc.setItems(roles);
+        System.out.println("Загружено ролей: " + roles.size());
+        roles.forEach(r -> System.out.println(r.getName() + " (" + r.getChildren().size() + " permissions)"));
+
+        entitiesDc.getMutableItems().clear();
+        entitiesDc.getMutableItems().addAll(roles);
     }
 
-
-
-
-    // 🔍 обработка фильтра по имени
     @Subscribe("nameFilter")
     public void onNameFilterValueChange(HasValue.ValueChangeEvent<String> event) {
         nameFilterText = event.getValue() != null ? event.getValue() : "";
         loadRoles();
     }
 
-    // 🔽 обработка фильтра по категории
     @Subscribe("categoryFilter")
     public void onCategoryFilterValueChange(HasValue.ValueChangeEvent<String> event) {
         selectedCategory = event.getValue();
