@@ -1,6 +1,11 @@
 <view xmlns="http://jmix.io/schema/flowui/view"
-      title="Roles"
+      title="Роли"
       focusComponent="entitiesTree">
+
+    <data readOnly="true">
+        <collection id="entitiesDc"
+                    class="ru.thedevs.testproject.dto.RoleTreeNode"/>
+    </data>
 
     <facets>
         <settings auto="true"/>
@@ -10,11 +15,6 @@
         <action id="selectAction" type="lookup_select"/>
         <action id="discardAction" type="lookup_discard"/>
     </actions>
-
-    <data>
-        <collection id="entitiesDc"
-                    class="ru.thedevs.testproject.dto.RoleTreeNode"/>
-    </data>
 
     <layout expand="entitiesTree">
 
@@ -29,14 +29,14 @@
 
         <treeDataGrid id="entitiesTree"
                       dataContainer="entitiesDc"
-                      hierarchyProperty="children"
+                      hierarchyProperty="parent"
                       selectionMode="MULTI"
+                      columnReorderingAllowed="true"
                       width="100%"
                       minHeight="30em">
-
-            <columns>
+            <columns resizable="true">
                 <column property="enabled" header="Вкл" editable="true"/>
-                <column property="name" header="Название"/>
+                <column property="name" header="Название" flexGrow="2"/>
                 <column property="category" header="Категория" editable="true"/>
             </columns>
         </treeDataGrid>
@@ -47,4 +47,3 @@
         </hbox>
     </layout>
 </view>
-

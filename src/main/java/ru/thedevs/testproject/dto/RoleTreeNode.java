@@ -6,6 +6,7 @@ import io.jmix.core.metamodel.annotation.InstanceName;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @JmixEntity(name = "test_RoleTreeNode")
@@ -26,6 +27,7 @@ public class RoleTreeNode {
     private String action;
     private String resource;
     private String permissionType;
+    private RoleTreeNode parent;
 
     private List<RoleTreeNode> children = new ArrayList<>();
 
@@ -66,6 +68,13 @@ public class RoleTreeNode {
         this.id = id;
     }
 
+    public RoleTreeNode getParent() {
+        return parent;
+    }
+
+    public void setParent(RoleTreeNode parent) {
+        this.parent = parent;
+    }
 
     public String getNodeType() { return nodeType; }
     public void setNodeType(String nodeType) { this.nodeType = nodeType; }
@@ -77,4 +86,17 @@ public class RoleTreeNode {
     public List<RoleTreeNode> getChildren() { return children; }
     public void setChildren(List<RoleTreeNode> children) { this.children = children; }
     public void addChild(RoleTreeNode child) { this.children.add(child); }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RoleTreeNode that = (RoleTreeNode) o;
+        return Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 }

@@ -49,7 +49,9 @@ public class CustomResourceRoleModelLookupView extends StandardListView<Resource
                             ))
                             .collect(Collectors.toList());
 
+                    children.forEach(c -> c.setParent(group));
                     group.setChildren(children);
+
                     return group;
                 })
                 .filter(r -> nameFilterText.isEmpty() ||
@@ -57,12 +59,17 @@ public class CustomResourceRoleModelLookupView extends StandardListView<Resource
                 .filter(r -> selectedCategory == null || selectedCategory.equals(r.getCategory()))
                 .collect(Collectors.toList());
 
-        System.out.println("Загружено ролей: " + roles.size());
-        roles.forEach(r -> System.out.println(r.getName() + " (" + r.getChildren().size() + " permissions)"));
 
-        entitiesDc.getMutableItems().clear();
-        entitiesDc.getMutableItems().addAll(roles);
+        List<RoleTreeNode> allNodes = new java.util.ArrayList<>();
+        roles.forEach(r -> {
+            allNodes.add(r);
+            allNodes.addAll(r.getChildren());
+        });
+
+        System.out.println("Загружено ролей: " + roles.size());
+        entitiesDc.setItems(allNodes);
     }
+
 
     @Subscribe("nameFilter")
     public void onNameFilterValueChange(HasValue.ValueChangeEvent<String> event) {
