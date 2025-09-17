@@ -45,9 +45,10 @@ public class RoleTreeNode {
         node.action = action;
         node.resource = resource;
         node.permissionType = type != null ? type : "";
-        node.name = action + " : " + resource;
+        node.name = action;
         return node;
     }
+
 
     // --- getters/setters ---
     public String getId() { return id; }

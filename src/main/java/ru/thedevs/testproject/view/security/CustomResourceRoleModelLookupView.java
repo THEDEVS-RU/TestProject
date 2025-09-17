@@ -1,11 +1,12 @@
 package ru.thedevs.testproject.view.security;
 
 import com.vaadin.flow.component.HasValue;
+import com.vaadin.flow.component.grid.ItemDoubleClickEvent;
 import com.vaadin.flow.router.Route;
+import io.jmix.flowui.component.grid.TreeDataGrid;
 import io.jmix.flowui.model.CollectionContainer;
 import io.jmix.flowui.view.*;
-import io.jmix.security.model.ResourcePolicyModel;
-import io.jmix.security.model.ResourceRoleModel;
+import io.jmix.security.model.ResourceRole;
 import io.jmix.security.role.ResourceRoleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import ru.thedevs.testproject.dto.RoleTreeNode;
@@ -21,10 +22,12 @@ import java.util.stream.Collectors;
 @ViewDescriptor("custom-resource-role-model-lookup-view.xml")
 @LookupComponent("entitiesTree")
 @DialogMode(width = "70em", height = "45em")
-public class CustomResourceRoleModelLookupView extends StandardListView<ResourceRoleModel> {
+public class CustomResourceRoleModelLookupView extends StandardListView<RoleTreeNode> {
 
     @ViewComponent
     private CollectionContainer<RoleTreeNode> entitiesDc;
+    @ViewComponent
+    private TreeDataGrid<RoleTreeNode> entitiesTree;
 
     @Autowired
     private ResourceRoleRepository roleRepository;
@@ -38,62 +41,75 @@ public class CustomResourceRoleModelLookupView extends StandardListView<Resource
     }
 
     private void loadRoles() {
-        List<RoleTreeNode> roles = roleRepository.getAllRoles().stream()
-                .map(role -> {
-                    String category = role.getCustomProperties()
-                            .getOrDefault("category", "Общая");
+//        dumpAllRolesToConsole();
 
-                    RoleTreeNode roleNode = RoleTreeNode.group(role.getName(), category);
+        Map<String, List<ResourceRole>> byEntity = roleRepository.getAllRoles().stream()
+                .collect(Collectors.groupingBy(role -> {
+                    String name = role.getName();
+                    if (name.contains(":")) {
+                        return name.split(":")[0].trim();
+                    }
+                    return name.trim();
+                }));
 
-                    // группировка по resource
-                    Map<String, List<ResourcePolicyModel>> byResource = role.getResourcePolicies().stream()
-                            .map(p -> {
-                                ResourcePolicyModel rpm = new ResourcePolicyModel();
-                                rpm.setAction(p.getAction());
-                                rpm.setResource(p.getResource());
-                                rpm.setType(p.getType());
-                                return rpm;
-                            })
-                            .collect(Collectors.groupingBy(ResourcePolicyModel::getResource));
+        List<RoleTreeNode> entityNodes = byEntity.entrySet().stream()
+                .map(entry -> {
+                    String entityName = entry.getKey();
 
-                    List<RoleTreeNode> resourceNodes = byResource.entrySet().stream()
-                            .map(entry -> {
-                                String resource = entry.getKey();
-                                RoleTreeNode resourceNode = RoleTreeNode.group(resource, category);
-                                resourceNode.setParent(roleNode);
+                    RoleTreeNode entityNode = RoleTreeNode.group(entityName, "Общая");
 
-                                // действия сразу внутри ресурса
-                                List<RoleTreeNode> actionNodes = entry.getValue().stream()
-                                        .map(p -> {
-                                            RoleTreeNode actionNode = RoleTreeNode.permission(
-                                                    p.getAction(),
-                                                    p.getResource(),
-                                                    p.getType()
-                                            );
-                                            actionNode.setParent(resourceNode);
-                                            return actionNode;
-                                        })
-                                        .collect(Collectors.toList());
+                    List<RoleTreeNode> actionNodes = entry.getValue().stream()
+                            .map(role -> {
+                                String action = role.getName().contains(":")
+                                        ? role.getName().split(":")[1].trim()
+                                        : role.getName();
 
-                                resourceNode.setChildren(actionNodes);
-                                return resourceNode;
+                                RoleTreeNode actionNode = RoleTreeNode.permission(action, role.getCode(), role.getName());
+                                actionNode.setParent(entityNode);
+                                return actionNode;
                             })
                             .collect(Collectors.toList());
 
-                    roleNode.setChildren(resourceNodes);
-                    return roleNode;
+                    entityNode.setChildren(actionNodes);
+                    return entityNode;
                 })
                 .collect(Collectors.toList());
 
-        // плоский список для контейнера
         List<RoleTreeNode> allNodes = new ArrayList<>();
-        roles.forEach(r -> {
+        entityNodes.forEach(r -> {
             allNodes.add(r);
             allNodes.addAll(flatten(r.getChildren()));
         });
 
         entitiesDc.setItems(allNodes);
     }
+
+
+//    private void dumpAllRolesToConsole() {
+//        Collection<ResourceRole> roles = roleRepository.getAllRoles();
+//        System.out.println("=== Всего ролей: " + (roles != null ? roles.size() : 0) + " ===");
+//        if (roles == null) return;
+//
+//        for (ResourceRole role : roles) {
+//            System.out.println("--------------------------------------------------");
+//            System.out.println("Role:");
+//            System.out.println("  name: " + String.valueOf(role.getName()));
+//            System.out.println("  code: " + String.valueOf(role.getCode()));
+//            System.out.println("  source: " + String.valueOf(role.getSource()));
+//            System.out.println("  description: " + String.valueOf(role.getDescription()));
+//            System.out.println("  tenantId: " + String.valueOf(role.getTenantId()));
+//
+//            System.out.println("  childRoles:");
+//            if (role.getChildRoles() != null && !role.getChildRoles().isEmpty()) {
+//                for (String cr : role.getChildRoles()) {
+//                    System.out.println("    - " + cr);
+//                }
+//            } else {
+//                System.out.println("    (none)");
+//            }
+//        }
+//        System.out.println("=== Конец вывода ролей ===");
+//    }
 
     private List<RoleTreeNode> flatten(List<RoleTreeNode> nodes) {
         List<RoleTreeNode> flat = new ArrayList<>();
@@ -114,5 +130,17 @@ public class CustomResourceRoleModelLookupView extends StandardListView<Resource
     public void onCategoryFilterValueChange(HasValue.ValueChangeEvent<String> event) {
         selectedCategory = event.getValue();
         loadRoles();
+    }
+
+    @Subscribe("entitiesTree")
+    public void onEntitiesTreeItemDoubleClick(ItemDoubleClickEvent<RoleTreeNode> event) {
+        RoleTreeNode clicked = event.getItem();
+        if (clicked != null) {
+            if (entitiesTree.isExpanded(clicked)) {
+                entitiesTree.collapse(clicked);
+            } else {
+                entitiesTree.expand(clicked);
+            }
+        }
     }
 }
