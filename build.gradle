@@ -46,9 +46,9 @@ dependencies {
 
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'ru.thedevs:core:2.6.1.51'
-    implementation 'ru.thedevs:core-ui:2.6.1.15'
-    implementation 'ru.thedevs:security:2.6.1.17'
+    implementation 'ru.thedevs:core:2.6.1.55'
+    implementation 'ru.thedevs:core-ui:2.6.1.29'
+    implementation 'ru.thedevs:security:2.6.1.18'
 
     runtimeOnly 'org.hsqldb:hsqldb'
 
