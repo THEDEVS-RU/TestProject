@@ -13,6 +13,7 @@ import ru.thedevs.testproject.dto.RoleTreeNode;
 import ru.thedevs.testproject.view.main.MainView;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -41,42 +42,54 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
     }
 
     private void loadRoles() {
-//        dumpAllRolesToConsole();
+        dumpAllRolesToConsole();
 
-        Map<String, List<ResourceRole>> byEntity = roleRepository.getAllRoles().stream()
+        Map<String, List<ResourceRole>> byPolicyGroup = roleRepository.getAllRoles().stream()
                 .collect(Collectors.groupingBy(role -> {
-                    String name = role.getName();
-                    if (name.contains(":")) {
-                        return name.split(":")[0].trim();
+                    if (role.getResourcePolicies() != null && !role.getResourcePolicies().isEmpty()) {
+                        String policyGroup = role.getResourcePolicies().iterator().next().getPolicyGroup();
+                        if (policyGroup == null) return "Без группы";
+
+                        String normalized = policyGroup
+                                .replaceAll("(Edit|Read|Delete|Create)$", "")
+                                .replaceAll("Role$", "");
+                        normalized = normalized.substring(0, 1).toUpperCase() + normalized.substring(1);
+
+                        return normalized;
                     }
-                    return name.trim();
+                    return "Без группы";
                 }));
 
-        List<RoleTreeNode> entityNodes = byEntity.entrySet().stream()
+        List<RoleTreeNode> groupNodes = byPolicyGroup.entrySet().stream()
                 .map(entry -> {
-                    String entityName = entry.getKey();
+                    String groupName = entry.getKey();
 
-                    RoleTreeNode entityNode = RoleTreeNode.group(entityName, "Общая");
+                    RoleTreeNode groupNode = RoleTreeNode.group(groupName, "Полиси-группа");
 
                     List<RoleTreeNode> actionNodes = entry.getValue().stream()
                             .map(role -> {
+                                // имя действия берём из имени роли (после ":") либо целиком
                                 String action = role.getName().contains(":")
                                         ? role.getName().split(":")[1].trim()
                                         : role.getName();
 
-                                RoleTreeNode actionNode = RoleTreeNode.permission(action, role.getCode(), role.getName());
-                                actionNode.setParent(entityNode);
+                                RoleTreeNode actionNode = RoleTreeNode.permission(
+                                        action,
+                                        role.getCode(),
+                                        role.getName()
+                                );
+                                actionNode.setParent(groupNode);
                                 return actionNode;
                             })
                             .collect(Collectors.toList());
 
-                    entityNode.setChildren(actionNodes);
-                    return entityNode;
+                    groupNode.setChildren(actionNodes);
+                    return groupNode;
                 })
                 .collect(Collectors.toList());
 
         List<RoleTreeNode> allNodes = new ArrayList<>();
-        entityNodes.forEach(r -> {
+        groupNodes.forEach(r -> {
             allNodes.add(r);
             allNodes.addAll(flatten(r.getChildren()));
         });
@@ -85,31 +98,55 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
     }
 
 
-//    private void dumpAllRolesToConsole() {
-//        Collection<ResourceRole> roles = roleRepository.getAllRoles();
-//        System.out.println("=== Всего ролей: " + (roles != null ? roles.size() : 0) + " ===");
-//        if (roles == null) return;
-//
-//        for (ResourceRole role : roles) {
-//            System.out.println("--------------------------------------------------");
-//            System.out.println("Role:");
-//            System.out.println("  name: " + String.valueOf(role.getName()));
-//            System.out.println("  code: " + String.valueOf(role.getCode()));
-//            System.out.println("  source: " + String.valueOf(role.getSource()));
-//            System.out.println("  description: " + String.valueOf(role.getDescription()));
-//            System.out.println("  tenantId: " + String.valueOf(role.getTenantId()));
-//
-//            System.out.println("  childRoles:");
-//            if (role.getChildRoles() != null && !role.getChildRoles().isEmpty()) {
-//                for (String cr : role.getChildRoles()) {
-//                    System.out.println("    - " + cr);
-//                }
-//            } else {
-//                System.out.println("    (none)");
-//            }
-//        }
-//        System.out.println("=== Конец вывода ролей ===");
-//    }
+    private void dumpAllRolesToConsole() {
+        Collection<ResourceRole> roles = roleRepository.getAllRoles();
+        System.out.println("=== Всего ролей: " + (roles != null ? roles.size() : 0) + " ===");
+        if (roles == null) return;
+
+        for (ResourceRole role : roles) {
+            System.out.println("--------------------------------------------------");
+            System.out.println("Role:");
+            System.out.println("  name: " + role.getName());
+            System.out.println("  code: " + role.getCode());
+            System.out.println("  source: " + role.getSource());
+            System.out.println("  description: " + role.getDescription());
+            System.out.println("  tenantId: " + role.getTenantId());
+
+            System.out.println("  childRoles:");
+            if (role.getChildRoles() != null && !role.getChildRoles().isEmpty()) {
+                role.getChildRoles().forEach(cr -> System.out.println("    - " + cr));
+            } else {
+                System.out.println("    (none)");
+            }
+
+            System.out.println("  scopes:");
+            if (role.getScopes() != null && !role.getScopes().isEmpty()) {
+                role.getScopes().forEach(scope -> System.out.println("    - " + scope));
+            } else {
+                System.out.println("    (none)");
+            }
+
+            System.out.println("  resourcePolicies:");
+            if (role.getResourcePolicies() != null && !role.getResourcePolicies().isEmpty()) {
+                for (var policy : role.getResourcePolicies()) {
+                    System.out.println("    - type: " + policy.getType());
+                    System.out.println("      resource: " + policy.getResource());
+                    System.out.println("      action: " + policy.getAction());
+                    System.out.println("      effect: " + policy.getEffect());
+                    System.out.println("      policyGroup: " + policy.getPolicyGroup());
+                    if (policy.getCustomProperties() != null && !policy.getCustomProperties().isEmpty()) {
+                        System.out.println("      customProperties:");
+                        policy.getCustomProperties().forEach((k, v) ->
+                                System.out.println("        * " + k + " = " + v));
+                    }
+                }
+            } else {
+                System.out.println("    (none)");
+            }
+        }
+        System.out.println("=== Конец вывода ролей ===");
+    }
+
 
     private List<RoleTreeNode> flatten(List<RoleTreeNode> nodes) {
         List<RoleTreeNode> flat = new ArrayList<>();
