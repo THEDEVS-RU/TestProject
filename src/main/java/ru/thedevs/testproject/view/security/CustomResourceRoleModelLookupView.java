@@ -5,6 +5,7 @@ import com.vaadin.flow.component.grid.ItemDoubleClickEvent;
 import com.vaadin.flow.router.Route;
 import io.jmix.flowui.component.grid.TreeDataGrid;
 import io.jmix.flowui.model.CollectionContainer;
+import io.jmix.flowui.model.InstanceContainer;
 import io.jmix.flowui.view.*;
 import io.jmix.security.model.ResourceRole;
 import io.jmix.security.role.ResourceRoleRepository;
@@ -39,6 +40,43 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
     @Subscribe
     public void onBeforeShow(BeforeShowEvent event) {
         loadRoles();
+
+        entitiesDc.addItemPropertyChangeListener(this::onItemPropertyChange);
+    }
+
+    private void onItemPropertyChange(InstanceContainer.ItemPropertyChangeEvent<RoleTreeNode> event) {
+        if ("enabled".equals(event.getProperty())) {
+            RoleTreeNode node = event.getItem();
+            Boolean newValue = (Boolean) event.getValue();
+
+            if (node != null && newValue != null) {
+                node.setEnabled(newValue);
+
+                updateParentState(node.getParent());
+
+                entitiesDc.setItems(new ArrayList<>(entitiesDc.getItems()));
+            }
+        }
+    }
+
+    private void updateParentState(RoleTreeNode parent) {
+        if (parent == null) return;
+
+        boolean allEnabled = parent.getChildren().stream()
+                .allMatch(RoleTreeNode::getEnabled);
+
+        boolean allDisabled = parent.getChildren().stream()
+                .noneMatch(RoleTreeNode::getEnabled);
+
+        if (allEnabled) {
+            parent.setEnabled(true);
+        } else if (allDisabled) {
+            parent.setEnabled(false);
+        } else {
+            parent.setEnabled(false);
+        }
+
+        updateParentState(parent.getParent());
     }
 
     private void loadRoles() {
@@ -62,13 +100,12 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
 
         List<RoleTreeNode> groupNodes = byPolicyGroup.entrySet().stream()
                 .map(entry -> {
-                    String groupName = entry.getKey();
+                    String displayName = entry.getValue().get(0).getName().split(":")[0].trim();
 
-                    RoleTreeNode groupNode = RoleTreeNode.group(groupName, "Полиси-группа");
+                    RoleTreeNode groupNode = RoleTreeNode.group(displayName, "Полиси-группа");
 
                     List<RoleTreeNode> actionNodes = entry.getValue().stream()
                             .map(role -> {
-                                // имя действия берём из имени роли (после ":") либо целиком
                                 String action = role.getName().contains(":")
                                         ? role.getName().split(":")[1].trim()
                                         : role.getName();
@@ -96,7 +133,6 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
 
         entitiesDc.setItems(allNodes);
     }
-
 
     private void dumpAllRolesToConsole() {
         Collection<ResourceRole> roles = roleRepository.getAllRoles();
@@ -146,7 +182,6 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         }
         System.out.println("=== Конец вывода ролей ===");
     }
-
 
     private List<RoleTreeNode> flatten(List<RoleTreeNode> nodes) {
         List<RoleTreeNode> flat = new ArrayList<>();
