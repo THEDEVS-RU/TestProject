@@ -2,7 +2,7 @@
       title="Роли"
       focusComponent="entitiesTree">
 
-    <data readOnly="true">
+    <data>
         <collection id="entitiesDc"
                     class="ru.thedevs.testproject.dto.RoleTreeNode"/>
     </data>
