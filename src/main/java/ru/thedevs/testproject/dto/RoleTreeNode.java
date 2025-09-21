@@ -3,6 +3,7 @@ package ru.thedevs.testproject.dto;
 import io.jmix.core.entity.annotation.JmixId;
 import io.jmix.core.metamodel.annotation.JmixEntity;
 import io.jmix.core.metamodel.annotation.InstanceName;
+import io.jmix.security.model.ResourceRoleModel;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -10,10 +11,10 @@ import java.util.Objects;
 import java.util.UUID;
 
 @JmixEntity(name = "test_RoleTreeNode")
-public class RoleTreeNode {
+public class RoleTreeNode extends ResourceRoleModel {
 
     @JmixId
-    private String id = UUID.randomUUID().toString();
+    private UUID id = UUID.randomUUID();
 
     @InstanceName
     private String name;
@@ -39,19 +40,21 @@ public class RoleTreeNode {
         return node;
     }
 
-    public static RoleTreeNode permission(String action, String resource, String type) {
+    public static RoleTreeNode permission(String action, String code, String type) {
         RoleTreeNode node = new RoleTreeNode();
         node.nodeType = "PERMISSION";
         node.action = action;
-        node.resource = resource;
+        node.setCode(code);                 
+        node.resource = code;
         node.permissionType = type != null ? type : "";
         node.name = action;
         return node;
     }
 
 
+
     // --- getters/setters ---
-    public String getId() { return id; }
+    public UUID getId() { return id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 
@@ -65,7 +68,7 @@ public class RoleTreeNode {
             children.forEach(c -> c.setEnabled(enabled));
         }
     }
-    public void setId(String id) {
+    public void setId(UUID id) {
         this.id = id;
     }
 
