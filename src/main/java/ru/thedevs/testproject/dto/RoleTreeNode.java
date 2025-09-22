@@ -1,8 +1,8 @@
 package ru.thedevs.testproject.dto;
 
 import io.jmix.core.entity.annotation.JmixId;
-import io.jmix.core.metamodel.annotation.JmixEntity;
 import io.jmix.core.metamodel.annotation.InstanceName;
+import io.jmix.core.metamodel.annotation.JmixEntity;
 import io.jmix.security.model.ResourceRoleModel;
 
 import java.util.ArrayList;
@@ -25,6 +25,8 @@ public class RoleTreeNode extends ResourceRoleModel {
     /** "GROUP" или "PERMISSION" */
     private String nodeType;
 
+    private Boolean assigned = false;
+
     private String action;
     private String resource;
     private String permissionType;
@@ -37,6 +39,7 @@ public class RoleTreeNode extends ResourceRoleModel {
         node.nodeType = "GROUP";
         node.name = name;
         node.category = category;
+        node.assigned = false;
         return node;
     }
 
@@ -44,17 +47,36 @@ public class RoleTreeNode extends ResourceRoleModel {
         RoleTreeNode node = new RoleTreeNode();
         node.nodeType = "PERMISSION";
         node.action = action;
-        node.setCode(code);                 
+        node.setCode(code);
         node.resource = code;
         node.permissionType = type != null ? type : "";
         node.name = action;
+        node.assigned = false;
         return node;
     }
 
-
-
     // --- getters/setters ---
+
+    public Boolean getAssigned() {
+        return assigned;
+    }
+
+    public void setAssigned(Boolean assigned) {
+        setAssigned(assigned, true);
+    }
+
+    public void setAssigned(Boolean assigned, boolean propagateDown) {
+        this.assigned = assigned != null ? assigned : Boolean.FALSE;
+        if (propagateDown && children != null) {
+            for (RoleTreeNode c : children) {
+                c.setAssigned(this.assigned, true);
+            }
+        }
+    }
+
     public UUID getId() { return id; }
+    public void setId(UUID id) { this.id = id; }
+
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 
@@ -68,17 +90,9 @@ public class RoleTreeNode extends ResourceRoleModel {
             children.forEach(c -> c.setEnabled(enabled));
         }
     }
-    public void setId(UUID id) {
-        this.id = id;
-    }
 
-    public RoleTreeNode getParent() {
-        return parent;
-    }
-
-    public void setParent(RoleTreeNode parent) {
-        this.parent = parent;
-    }
+    public RoleTreeNode getParent() { return parent; }
+    public void setParent(RoleTreeNode parent) { this.parent = parent; }
 
     public String getNodeType() { return nodeType; }
     public void setNodeType(String nodeType) { this.nodeType = nodeType; }
@@ -89,7 +103,12 @@ public class RoleTreeNode extends ResourceRoleModel {
 
     public List<RoleTreeNode> getChildren() { return children; }
     public void setChildren(List<RoleTreeNode> children) { this.children = children; }
-    public void addChild(RoleTreeNode child) { this.children.add(child); }
+    public void addChild(RoleTreeNode child) {
+        if (child != null) {
+            child.setParent(this);
+            this.children.add(child);
+        }
+    }
 
     @Override
     public boolean equals(Object o) {

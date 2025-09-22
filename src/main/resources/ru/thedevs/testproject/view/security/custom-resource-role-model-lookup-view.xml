@@ -35,9 +35,9 @@
                       width="100%"
                       minHeight="30em">
             <columns resizable="true">
-                <column property="enabled" header="Вкл" editable="true"/>
+                <column property="assigned" header="Назначена"/>
                 <column property="name" header="Название" flexGrow="2"/>
-                <column property="category" header="Категория" editable="true"/>
+                <column property="category" header="Категория"/>
             </columns>
         </treeDataGrid>
 

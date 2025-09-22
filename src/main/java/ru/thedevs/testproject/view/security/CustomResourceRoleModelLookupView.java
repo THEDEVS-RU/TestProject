@@ -1,7 +1,10 @@
 package ru.thedevs.testproject.view.security;
 
 import com.vaadin.flow.component.HasValue;
+import com.vaadin.flow.component.checkbox.Checkbox;
+import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.ItemDoubleClickEvent;
+import com.vaadin.flow.data.renderer.ComponentRenderer;
 import com.vaadin.flow.router.Route;
 import io.jmix.flowui.component.grid.TreeDataGrid;
 import io.jmix.flowui.model.CollectionContainer;
@@ -12,9 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import ru.thedevs.testproject.dto.RoleTreeNode;
 import ru.thedevs.testproject.view.main.MainView;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Route(value = "sec/resourcerolemodelslookup", layout = MainView.class)
@@ -35,9 +36,13 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
     private String nameFilterText = "";
     private String selectedCategory = null;
 
+    private boolean isAdjustingSelection = false;
+    private boolean selectionListenerAttached = false;
+
     @Subscribe
     public void onBeforeShow(BeforeShowEvent event) {
         loadRoles();
+        setupAssignedRenderer();
     }
 
     private void loadRoles() {
@@ -50,6 +55,7 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
                         String normalized = policyGroup
                                 .replaceAll("(Edit|Read|Delete|Create)$", "")
                                 .replaceAll("Role$", "");
+                        if (normalized.isEmpty()) return "Без группы";
                         return normalized.substring(0, 1).toUpperCase() + normalized.substring(1);
                     }
                     return "Без группы";
@@ -76,7 +82,7 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
                             })
                             .collect(Collectors.toList());
 
-                    groupNode.setChildren(actionNodes);
+                    actionNodes.forEach(groupNode::addChild);
                     return groupNode;
                 })
                 .collect(Collectors.toList());
@@ -99,16 +105,242 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         return flat;
     }
 
+    private void setupAssignedRenderer() {
+        Grid.Column<RoleTreeNode> assignedCol = entitiesTree.getColumns().stream()
+                .filter(c -> {
+                    try {
+                        return "assigned".equals(c.getKey());
+                    } catch (Throwable ex) {
+                        return false;
+                    }
+                })
+                .findFirst()
+                .orElse(null);
+
+        ComponentRenderer<Checkbox, RoleTreeNode> componentRenderer = new ComponentRenderer<>(node -> {
+            Checkbox cb = new Checkbox(Boolean.TRUE.equals(node.getAssigned()));
+
+            if ("GROUP".equals(node.getNodeType())) {
+                boolean any = node.getChildren() != null && node.getChildren().stream().anyMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
+                boolean all = node.getChildren() != null && node.getChildren().stream().allMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
+                cb.setIndeterminate(any && !all);
+                cb.setValue(all);
+            } else {
+                cb.setValue(Boolean.TRUE.equals(node.getAssigned()));
+            }
+
+            cb.addValueChangeListener((HasValue.ValueChangeEvent<Boolean> ev) -> {
+                Boolean newValue = ev.getValue();
+                if ("GROUP".equals(node.getNodeType())) {
+                    setAssignedRecursivelyForPermissions(node, Boolean.TRUE.equals(newValue));
+                } else {
+                    node.setAssigned(Boolean.TRUE.equals(newValue));
+                }
+
+                updateParentsAssigned(node);
+
+                syncSelectionAfterAssignedChange(node, Boolean.TRUE.equals(newValue));
+
+                entitiesTree.getDataProvider().refreshAll();
+            });
+
+            return cb;
+        });
+
+        if (assignedCol != null) {
+            assignedCol.setRenderer(componentRenderer);
+        } else {
+            assignedCol = entitiesTree.addComponentColumn(node -> {
+                Checkbox cb = new Checkbox(Boolean.TRUE.equals(node.getAssigned()));
+
+                if ("GROUP".equals(node.getNodeType())) {
+                    boolean any = node.getChildren() != null && node.getChildren().stream().anyMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
+                    boolean all = node.getChildren() != null && node.getChildren().stream().allMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
+                    cb.setIndeterminate(any && !all);
+                    cb.setValue(all);
+                } else {
+                    cb.setValue(Boolean.TRUE.equals(node.getAssigned()));
+                }
+
+                cb.addValueChangeListener((HasValue.ValueChangeEvent<Boolean> ev) -> {
+                    Boolean newValue = ev.getValue();
+                    if ("GROUP".equals(node.getNodeType())) {
+                        setAssignedRecursivelyForPermissions(node, Boolean.TRUE.equals(newValue));
+                    } else {
+                        node.setAssigned(Boolean.TRUE.equals(newValue));
+                    }
+
+                    updateParentsAssigned(node);
+                    syncSelectionAfterAssignedChange(node, Boolean.TRUE.equals(newValue));
+                    entitiesTree.getDataProvider().refreshAll();
+                });
+
+                return cb;
+            }).setHeader("Назначена").setKey("assigned");
+        }
+
+        Grid.Column<RoleTreeNode> nameCol = entitiesTree.getColumns().stream()
+                .filter(c -> {
+                    try {
+                        return "name".equals(c.getKey());
+                    } catch (Throwable ex) { return false; }
+                }).findFirst().orElse(null);
+
+        Grid.Column<RoleTreeNode> categoryCol = entitiesTree.getColumns().stream()
+                .filter(c -> {
+                    try {
+                        return "category".equals(c.getKey());
+                    } catch (Throwable ex) { return false; }
+                }).findFirst().orElse(null);
+
+        if (nameCol != null && assignedCol != null) {
+            if (categoryCol != null) {
+                entitiesTree.setColumnOrder(nameCol, assignedCol, categoryCol);
+            } else {
+                entitiesTree.setColumnOrder(nameCol, assignedCol);
+            }
+        }
+
+        if (!selectionListenerAttached) {
+            entitiesTree.addSelectionListener(event -> {
+                if (isAdjustingSelection) return;
+                Set<RoleTreeNode> selected = new LinkedHashSet<>(entitiesTree.getSelectedItems());
+
+                boolean groupsSelected = selected.stream().anyMatch(s -> "GROUP".equals(s.getNodeType()));
+                if (groupsSelected) {
+                    // если пользователь попытался выбрать группу — заменим выбор на все PERMISSION-дети
+                    Set<RoleTreeNode> newSel = new LinkedHashSet<>();
+                    for (RoleTreeNode s : selected) {
+                        if ("GROUP".equals(s.getNodeType())) {
+                            newSel.addAll(gatherPermissionDescendants(s));
+                        } else {
+                            newSel.add(s);
+                        }
+                    }
+                    isAdjustingSelection = true;
+                    entitiesTree.deselectAll();
+                    newSel.forEach(entitiesTree::select);
+
+                    Collection<RoleTreeNode> all = entitiesDc.getItems();
+                    for (RoleTreeNode item : all) {
+                        if ("PERMISSION".equals(item.getNodeType())) {
+                            boolean sel = newSel.contains(item);
+                            item.setAssigned(sel, false);
+                        }
+                    }
+                    for (RoleTreeNode item : all) {
+                        if ("GROUP".equals(item.getNodeType())) {
+                            boolean allAssigned = item.getChildren() != null && item.getChildren().stream().allMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
+                            item.setAssigned(allAssigned, false);
+                        }
+                    }
+
+                    entitiesTree.getDataProvider().refreshAll();
+                    isAdjustingSelection = false;
+                } else {
+                    Collection<RoleTreeNode> all = entitiesDc.getItems();
+                    for (RoleTreeNode item : all) {
+                        if ("PERMISSION".equals(item.getNodeType())) {
+                            boolean sel = selected.contains(item);
+                            item.setAssigned(sel, false);
+                        }
+                    }
+                    for (RoleTreeNode item : all) {
+                        if ("GROUP".equals(item.getNodeType())) {
+                            boolean allAssigned = item.getChildren() != null && item.getChildren().stream().allMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
+                            item.setAssigned(allAssigned, false);
+                        }
+                    }
+                    entitiesTree.getDataProvider().refreshAll();
+                }
+            });
+            selectionListenerAttached = true;
+        }
+
+        entitiesTree.getDataProvider().refreshAll();
+    }
+
+    private List<RoleTreeNode> gatherPermissionDescendants(RoleTreeNode node) {
+        List<RoleTreeNode> result = new ArrayList<>();
+        if (node == null) return result;
+        if ("PERMISSION".equals(node.getNodeType())) {
+            result.add(node);
+        }
+        if (node.getChildren() != null) {
+            for (RoleTreeNode c : node.getChildren()) {
+                result.addAll(gatherPermissionDescendants(c));
+            }
+        }
+        return result;
+    }
+
+    private void setAssignedRecursivelyForPermissions(RoleTreeNode node, boolean assigned) {
+        if (node == null) return;
+        if (node.getChildren() == null) return;
+        for (RoleTreeNode c : node.getChildren()) {
+            if ("PERMISSION".equals(c.getNodeType()) && c.getResource() != null) {
+                c.setAssigned(assigned);
+            }
+            setAssignedRecursivelyForPermissions(c, assigned);
+        }
+    }
+
+    private void updateParentsAssigned(RoleTreeNode node) {
+        RoleTreeNode p = node.getParent();
+        while (p != null) {
+            boolean all = p.getChildren() != null && p.getChildren().stream().allMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
+            p.setAssigned(all, false); // не распространяем вниз
+            p = p.getParent();
+        }
+    }
+
+    private void syncSelectionAfterAssignedChange(RoleTreeNode node, boolean assigned) {
+        if (node == null) return;
+        List<RoleTreeNode> perms = gatherPermissionDescendants(node);
+        if (perms.isEmpty()) return;
+
+        isAdjustingSelection = true;
+        Set<RoleTreeNode> current = new LinkedHashSet<>(entitiesTree.getSelectedItems());
+
+        if (assigned) {
+            current.addAll(perms);
+        } else {
+            current.removeAll(perms);
+        }
+
+        entitiesTree.deselectAll();
+        current.forEach(entitiesTree::select);
+
+        Collection<RoleTreeNode> all = entitiesDc.getItems();
+        for (RoleTreeNode item : all) {
+            if ("PERMISSION".equals(item.getNodeType())) {
+                boolean sel = current.contains(item);
+                item.setAssigned(sel, false);
+            }
+        }
+        for (RoleTreeNode item : all) {
+            if ("GROUP".equals(item.getNodeType())) {
+                boolean allAssigned = item.getChildren() != null && item.getChildren().stream().allMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
+                item.setAssigned(allAssigned, false);
+            }
+        }
+
+        entitiesTree.getDataProvider().refreshAll();
+        isAdjustingSelection = false;
+    }
+
     @Subscribe("nameFilter")
     public void onNameFilterValueChange(HasValue.ValueChangeEvent<String> event) {
         nameFilterText = event.getValue() != null ? event.getValue() : "";
         loadRoles();
+        setupAssignedRenderer();
     }
 
     @Subscribe("categoryFilter")
     public void onCategoryFilterValueChange(HasValue.ValueChangeEvent<String> event) {
         selectedCategory = event.getValue();
         loadRoles();
+        setupAssignedRenderer();
     }
 
     @Subscribe("entitiesTree")
@@ -123,4 +355,3 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         }
     }
 }
-
