@@ -7,10 +7,6 @@
                     class="ru.thedevs.testproject.dto.RoleTreeNode"/>
     </data>
 
-    <facets>
-        <settings auto="true"/>
-    </facets>
-
     <actions>
         <action id="selectAction" type="lookup_select"/>
         <action id="discardAction" type="lookup_discard"/>
@@ -33,14 +29,7 @@
                       selectionMode="MULTI"
                       columnReorderingAllowed="true"
                       width="100%"
-                      minHeight="30em">
-            <columns resizable="true">
-                <column property="assigned" header="Назначена"/>
-                <column property="name" header="Название" flexGrow="2"/>
-                <column property="category" header="Категория"/>
-            </columns>
-        </treeDataGrid>
-
+                      minHeight="30em"/>
         <hbox id="lookupActions" visible="false">
             <button id="selectBtn" action="selectAction"/>
             <button id="discardBtn" action="discardAction"/>
