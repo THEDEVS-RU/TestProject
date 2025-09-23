@@ -1,20 +1,20 @@
 package ru.thedevs.testproject.view.security;
 
 import com.vaadin.flow.component.HasValue;
-import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.ItemDoubleClickEvent;
 import com.vaadin.flow.router.Route;
+import io.jmix.core.DataManager;
 import io.jmix.flowui.component.grid.TreeDataGrid;
 import io.jmix.flowui.model.CollectionContainer;
 import io.jmix.flowui.view.*;
 import io.jmix.security.model.ResourceRole;
 import io.jmix.security.role.ResourceRoleRepository;
+import io.jmix.security.role.assignment.RoleAssignmentModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import ru.thedevs.testproject.dto.RoleTreeNode;
 import ru.thedevs.testproject.view.main.MainView;
 
-import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -33,16 +33,36 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
     @Autowired
     private ResourceRoleRepository roleRepository;
 
+    @Autowired
+    private DataManager dataManager;
+
     private String nameFilterText = "";
     private String selectedCategory = null;
+
+    private String subjectUsername = null;
+
+    private final Set<String> existingAssignedRoleCodes = new HashSet<>();
 
     private boolean isAdjustingSelection = false;
     private boolean selectionListenerAttached = false;
 
+    public void setSubjectUsername(String subjectUsername) {
+        this.subjectUsername = subjectUsername;
+    }
+
+    public void setExistingAssignedRoleCodes(Collection<String> codes) {
+        this.existingAssignedRoleCodes.clear();
+        if (codes != null) this.existingAssignedRoleCodes.addAll(codes);
+    }
+
     @Subscribe
     public void onBeforeShow(BeforeShowEvent event) {
         loadRoles();
-        setupColumnsAndAssigned(); // перестраиваем колонки и скрываем колонку выбора строк
+        setupColumnsAndAssigned();
+
+        loadExistingAssignmentsIfNeeded();
+
+        applyInitialSelectionFromExistingAssignments();
     }
 
     private void loadRoles() {
@@ -105,19 +125,13 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         return flat;
     }
 
-    /**
-     * Перестроить колонки полностью и скрыть selection column (чекбоксы выбора строк),
-     * оставить ровно одну колонку-компонент "assigned".
-     */
     @SuppressWarnings("unchecked")
     private void setupColumnsAndAssigned() {
-        // 1) удалить все текущие колонки — надёжно убирает любые автогенерированные колонки
         List<Grid.Column<RoleTreeNode>> current = new ArrayList<>(entitiesTree.getColumns());
         for (Grid.Column<RoleTreeNode> c : current) {
             entitiesTree.removeColumn(c);
         }
 
-        // 2) добавить иерархическую колонку name (в ней появится треугольник разворачивания)
         Grid.Column<RoleTreeNode> nameCol;
         try {
             nameCol = entitiesTree.addHierarchyColumn(RoleTreeNode::getName)
@@ -125,54 +139,18 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
                     .setKey("name")
                     .setFlexGrow(2);
         } catch (Throwable t) {
-            // fallback если API не поддерживает addHierarchyColumn
             nameCol = entitiesTree.addColumn(RoleTreeNode::getName)
                     .setHeader("Название")
                     .setKey("name")
                     .setFlexGrow(2);
         }
 
-        // 3) добавить единственную колонку с чекбоксом (component column)
-        Grid.Column<RoleTreeNode> assignedCol = entitiesTree.addComponentColumn(node -> {
-            Checkbox cb = new Checkbox(Boolean.TRUE.equals(node.getAssigned()));
-
-            if ("GROUP".equals(node.getNodeType())) {
-                boolean any = node.getChildren() != null && node.getChildren().stream().anyMatch(ch -> Boolean.TRUE.equals(ch.getAssigned()));
-                boolean all = node.getChildren() != null && node.getChildren().stream().allMatch(ch -> Boolean.TRUE.equals(ch.getAssigned()));
-                cb.setIndeterminate(any && !all);
-                cb.setValue(all);
-            } else {
-                cb.setValue(Boolean.TRUE.equals(node.getAssigned()));
-            }
-
-            cb.addValueChangeListener((HasValue.ValueChangeEvent<Boolean> ev) -> {
-                Boolean newValue = ev.getValue();
-                if ("GROUP".equals(node.getNodeType())) {
-                    setAssignedRecursivelyForPermissions(node, Boolean.TRUE.equals(newValue));
-                } else {
-                    node.setAssigned(Boolean.TRUE.equals(newValue));
-                }
-
-                updateParentsAssigned(node);
-                syncSelectionAfterAssignedChange(node, Boolean.TRUE.equals(newValue));
-                entitiesTree.getDataProvider().refreshAll();
-            });
-
-            return cb;
-        }).setHeader("Назначена").setKey("assigned");
-
-        // 4) добавить колонку category
         Grid.Column<RoleTreeNode> categoryCol = entitiesTree.addColumn(RoleTreeNode::getCategory)
                 .setHeader("Категория")
                 .setKey("category");
 
-        // 5) установить порядок колонок: name, assigned, category
-        entitiesTree.setColumnOrder(nameCol, assignedCol, categoryCol);
+        entitiesTree.setColumnOrder(nameCol, categoryCol);
 
-        // 6) скрыть колонку выбора строк (selection checkbox), если она присутствует
-        hideSelectionColumnIfPresent();
-
-        // 7) слушатель селекции (один раз)
         if (!selectionListenerAttached) {
             entitiesTree.addSelectionListener(event -> {
                 if (isAdjustingSelection) return;
@@ -207,62 +185,6 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         entitiesTree.getDataProvider().refreshAll();
     }
 
-    /**
-     * Пытаемся получить selection column через reflection (getSelectionColumn),
-     * если не получилось — пытаемся найти колонку по ключу/названию и скрыть её.
-     */
-    private void hideSelectionColumnIfPresent() {
-        try {
-            Object selModel = entitiesTree.getSelectionModel();
-            if (selModel != null) {
-                Method getSelectionColumn = null;
-                try {
-                    getSelectionColumn = selModel.getClass().getMethod("getSelectionColumn");
-                } catch (NoSuchMethodException ignored) { }
-
-                if (getSelectionColumn != null) {
-                    Object selColObj = getSelectionColumn.invoke(selModel);
-                    if (selColObj != null) {
-                        // try cast to Grid.Column
-                        if (selColObj instanceof Grid.Column) {
-                            Grid.Column<?> selCol = (Grid.Column<?>) selColObj;
-                            selCol.setVisible(false);
-                            return;
-                        } else {
-                            // try to call setVisible(false) reflectively
-                            try {
-                                Method setVisible = selColObj.getClass().getMethod("setVisible", boolean.class);
-                                setVisible.invoke(selColObj, false);
-                                return;
-                            } catch (NoSuchMethodException | IllegalAccessException ex) {
-                                // fall through to fallback
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Throwable ignore) {
-            // fall through to fallback
-        }
-
-        // Fallback: попытка найти колонку с ключом/текстом "selection" и скрыть её
-        for (Grid.Column<RoleTreeNode> c : entitiesTree.getColumns()) {
-            String key = null;
-            try { key = c.getKey(); } catch (Throwable ignored) {}
-            if (key != null && key.toLowerCase().contains("select")) {
-                c.setVisible(false);
-                return;
-            }
-            // иногда ключа нет — проверим header
-            String header = null;
-            try { header = c.getHeaderText(); } catch (Throwable ignored) {}
-            if (header != null && header.toLowerCase().contains("select")) {
-                c.setVisible(false);
-                return;
-            }
-        }
-    }
-
     private void syncAssignments(Collection<RoleTreeNode> selected) {
         Collection<RoleTreeNode> all = entitiesDc.getItems();
         for (RoleTreeNode item : all) {
@@ -294,44 +216,54 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         return result;
     }
 
-    private void setAssignedRecursivelyForPermissions(RoleTreeNode node, boolean assigned) {
-        if (node == null) return;
-        if (node.getChildren() == null) return;
-        for (RoleTreeNode c : node.getChildren()) {
-            if ("PERMISSION".equals(c.getNodeType()) && c.getResource() != null) {
-                c.setAssigned(assigned);
+    private void loadExistingAssignmentsIfNeeded() {
+        if (existingAssignedRoleCodes != null && !existingAssignedRoleCodes.isEmpty()) return;
+
+        if (subjectUsername == null || subjectUsername.isEmpty()) return;
+
+        try {
+            List<RoleAssignmentModel> assignments = dataManager.load(RoleAssignmentModel.class)
+                    .all().list();
+            for (RoleAssignmentModel a : assignments) {
+                if (subjectUsername.equals(a.getUsername())) {
+                    String rt = a.getRoleType();
+                    if (rt != null && rt.toUpperCase().contains("RESOURCE")) {
+                        String code = a.getRoleCode();
+                        if (code != null) existingAssignedRoleCodes.add(code);
+                    }
+                }
             }
-            setAssignedRecursivelyForPermissions(c, assigned);
+        } catch (Exception ex) {
         }
     }
 
-    private void updateParentsAssigned(RoleTreeNode node) {
-        RoleTreeNode p = node.getParent();
-        while (p != null) {
-            boolean all = p.getChildren() != null && p.getChildren().stream().allMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
-            p.setAssigned(all, false);
-            p = p.getParent();
+    private void applyInitialSelectionFromExistingAssignments() {
+        if (existingAssignedRoleCodes == null || existingAssignedRoleCodes.isEmpty()) {
+            return;
         }
-    }
 
-    private void syncSelectionAfterAssignedChange(RoleTreeNode node, boolean assigned) {
-        if (node == null) return;
-        List<RoleTreeNode> perms = gatherPermissionDescendants(node);
-        if (perms.isEmpty()) return;
+        Collection<RoleTreeNode> all = entitiesDc.getItems();
+        Set<RoleTreeNode> toSelect = new LinkedHashSet<>();
+        for (RoleTreeNode n : all) {
+            if ("PERMISSION".equals(n.getNodeType())) {
+                // сопоставляем по коду роли (setCode в permission(...) был установлен) и по resource
+                String code = null;
+                try { code = n.getCode(); } catch (Throwable ignored) {}
+                String resource = n.getResource();
+                if ((code != null && existingAssignedRoleCodes.contains(code))
+                        || (resource != null && existingAssignedRoleCodes.contains(resource))) {
+                    toSelect.add(n);
+                }
+            }
+        }
+
+        if (toSelect.isEmpty()) return;
 
         isAdjustingSelection = true;
-        Set<RoleTreeNode> current = new LinkedHashSet<>(entitiesTree.getSelectedItems());
-
-        if (assigned) {
-            current.addAll(perms);
-        } else {
-            current.removeAll(perms);
-        }
-
         entitiesTree.deselectAll();
-        current.forEach(entitiesTree::select);
+        toSelect.forEach(entitiesTree::select);
 
-        syncAssignments(current);
+        syncAssignments(toSelect);
         entitiesTree.getDataProvider().refreshAll();
         isAdjustingSelection = false;
     }
@@ -341,6 +273,7 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         nameFilterText = event.getValue() != null ? event.getValue() : "";
         loadRoles();
         setupColumnsAndAssigned();
+        applyInitialSelectionFromExistingAssignments();
     }
 
     @Subscribe("categoryFilter")
@@ -348,6 +281,7 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         selectedCategory = event.getValue();
         loadRoles();
         setupColumnsAndAssigned();
+        applyInitialSelectionFromExistingAssignments();
     }
 
     @Subscribe("entitiesTree")
