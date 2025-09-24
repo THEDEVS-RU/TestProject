@@ -52,34 +52,22 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
     private boolean isAdjustingSelection = false;
     private boolean selectionListenerAttached = false;
 
-    // CONSOLE DIAGNOSTICS: включить / выключить вывод в консоль
-    private static final boolean DIAGNOSTICS_ENABLED = true;
-
     public void setSubjectUsername(String subjectUsername) {
         this.subjectUsername = subjectUsername;
     }
 
     public void setExistingAssignedRoleCodes(Collection<String> codes) {
         this.existingAssignedRoleCodes.clear();
-        if (codes != null) this.existingAssignedRoleCodes.addAll(codes);
+        if (codes != null) {
+            this.existingAssignedRoleCodes.addAll(codes);
+        }
     }
 
     @Subscribe
     public void onBeforeShow(BeforeShowEvent event) {
         loadRoles();
         setupColumnsAndAssigned();
-
-        // Load DB assignments
-        loadExistingAssignmentsIfNeeded();
-
-        // CONSOLE DIAGNOSTICS: печатаем краткую сводку в консоль
-        if (DIAGNOSTICS_ENABLED) {
-            System.out.println("=== DIAGNOSTICS: onBeforeShow ===");
-            System.out.println("subjectUsername = " + subjectUsername);
-            System.out.println("existingAssignedRoleCodes (from DB) size = " + existingAssignedRoleCodes.size());
-            System.out.println("existingAssignedRoleCodes = " + existingAssignedRoleCodes);
-        }
-
+        loadAssignmentsFromDb();
         applyInitialSelectionFromExistingAssignments();
     }
 
@@ -116,7 +104,6 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
                                         role.getName()
                                 );
 
-                                // enabled/assignable logic
                                 try {
                                     String source = role.getSource();
                                     boolean assignable = RoleSource.DATABASE.equals(source) || RoleSource.ANNOTATED_CLASS.equals(source);
@@ -142,7 +129,6 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
             finalAllNodes.addAll(flatten(r.getChildren()));
         });
 
-        // filters
         if (nameFilterText != null && !nameFilterText.isEmpty()) {
             allNodes = allNodes.stream()
                     .filter(n -> n.getName() != null && n.getName().toLowerCase().contains(nameFilterText.toLowerCase()))
@@ -199,6 +185,11 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
 
                 boolean groupsSelected = selected.stream().anyMatch(s -> "GROUP".equals(s.getNodeType()));
                 if (groupsSelected) {
+                    // Expand selected groups so their children are visible when user checks the group
+                    selected.stream()
+                            .filter(s -> "GROUP".equals(s.getNodeType()))
+                            .forEach(entitiesTree::expand);
+
                     Set<RoleTreeNode> newSel = new LinkedHashSet<>();
                     for (RoleTreeNode s : selected) {
                         if ("GROUP".equals(s.getNodeType())) {
@@ -257,103 +248,29 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         return result;
     }
 
-    /**
-     * CONSOLE DIAGNOSTICS:
-     * Загружает назначения из DB и печатает их в консоль в расширенном виде (для копипаста).
-     */
-    private void loadExistingAssignmentsIfNeeded() {
+    private void loadAssignmentsFromDb() {
+        existingAssignedRoleCodes.clear();
         if (subjectUsername == null || subjectUsername.isEmpty()) return;
-        if (!existingAssignedRoleCodes.isEmpty()) return;
 
-        try {
-            List<RoleAssignmentEntity> assignments = dataManager.load(RoleAssignmentEntity.class)
-                    .query("select r from sec_RoleAssignmentEntity r where r.username = :username and r.roleType = :type")
-                    .parameter("username", subjectUsername)
-                    .parameter("type", RoleAssignmentRoleType.RESOURCE)
-                    .list();
+        List<RoleAssignmentEntity> assignments = dataManager.load(RoleAssignmentEntity.class)
+                .query("select r from sec_RoleAssignmentEntity r where r.username = :username and r.roleType = :type")
+                .parameter("username", subjectUsername)
+                .parameter("type", RoleAssignmentRoleType.RESOURCE)
+                .list();
 
-            System.out.println("=== DIAGNOSTICS: loadExistingAssignmentsIfNeeded() results ===");
-            System.out.println("DB assignment rows count = " + assignments.size());
-
-            for (RoleAssignmentEntity a : assignments) {
-                String code = a.getRoleCode();
-                if (code != null) existingAssignedRoleCodes.add(code);
-
-                // печатаем детали каждой строки (копировать в чат)
-                System.out.println("DB_ROW -> id=" + a.getId()
-                        + ", username=" + a.getUsername()
-                        + ", roleCode='" + a.getRoleCode()
-                        + "', roleType='" + a.getRoleType() + "'");
-            }
-
-            System.out.println("existingAssignedRoleCodes after load = " + existingAssignedRoleCodes);
-        } catch (Exception ex) {
-            System.out.println("ERROR in loadExistingAssignmentsIfNeeded(): " + ex.getClass().getName() + " - " + ex.getMessage());
-            ex.printStackTrace(System.out);
-        }
+        assignments.stream()
+                .map(RoleAssignmentEntity::getRoleCode)
+                .filter(Objects::nonNull)
+                .forEach(existingAssignedRoleCodes::add);
     }
 
-    /**
-     * CONSOLE DIAGNOSTICS + улучшенная логика применения selection.
-     * - печатаем список ролей, которые есть в UI (детально)
-     * - печатаем список кодов из БД
-     * - печатаем коды, отсутствующие в UI
-     * - выполняем selection по найденным узлам
-     */
     private void applyInitialSelectionFromExistingAssignments() {
-        // Print UI roles list in detail
-        if (DIAGNOSTICS_ENABLED) {
-            System.out.println("=== DIAGNOSTICS: roles present in UI (entitiesDc) ===");
-            int i = 0;
-            for (RoleTreeNode n : entitiesDc.getItems()) {
-                i++;
-                System.out.println(String.format(Locale.ROOT,
-                        "UI[%d] id=%s type=%s name='%s' code='%s' resource='%s' assigned=%s enabled=%s children=%d",
-                        i,
-                        n.getId(), n.getNodeType(), n.getName(), n.getCode(), n.getResource(),
-                        n.getAssigned(), n.getEnabled(),
-                        n.getChildren() != null ? n.getChildren().size() : 0));
-            }
-            System.out.println("=== end UI roles list ===");
-        }
-
         if (existingAssignedRoleCodes == null || existingAssignedRoleCodes.isEmpty()) {
             syncAssignments(Collections.emptyList());
             entitiesTree.getDataProvider().refreshAll();
-            if (DIAGNOSTICS_ENABLED) {
-                System.out.println("DIAGNOSTICS: existingAssignedRoleCodes is empty -> no selection will be applied");
-            }
             return;
         }
 
-        // collect codes in tree (normalized)
-        Set<String> codesInTree = entitiesDc.getItems().stream()
-                .filter(n -> "PERMISSION".equals(n.getNodeType()))
-                .map(n -> {
-                    String c = n.getCode();
-                    String r = n.getResource();
-                    return c != null ? c.trim() : (r != null ? r.trim() : null);
-                })
-                .filter(Objects::nonNull)
-                .map(String::toLowerCase)
-                .collect(Collectors.toSet());
-
-        Set<String> normalizedDbCodes = existingAssignedRoleCodes.stream()
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .map(String::toLowerCase)
-                .collect(Collectors.toSet());
-
-        Set<String> missingInTree = new HashSet<>(normalizedDbCodes);
-        missingInTree.removeAll(codesInTree);
-
-        if (DIAGNOSTICS_ENABLED) {
-            System.out.println("DIAGNOSTICS: normalizedDbCodes = " + normalizedDbCodes);
-            System.out.println("DIAGNOSTICS: codesInTree = " + codesInTree);
-            System.out.println("DIAGNOSTICS: missingInTree (in DB but not in UI) = " + missingInTree);
-        }
-
-        // find nodes to select by matching normalized code/resource
         Set<RoleTreeNode> toSelect = new LinkedHashSet<>();
         for (String dbCode : existingAssignedRoleCodes) {
             if (dbCode == null) continue;
@@ -368,28 +285,15 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
                     })
                     .findFirst();
 
-            if (found.isPresent()) {
-                toSelect.add(found.get());
-                if (DIAGNOSTICS_ENABLED) {
-                    System.out.println("DIAGNOSTICS: matched DB code '" + dbCode + "' -> node id=" + found.get().getId() + " name=" + found.get().getName());
-                }
-            } else {
-                if (DIAGNOSTICS_ENABLED) {
-                    System.out.println("DIAGNOSTICS: DB code '" + dbCode + "' not matched to any UI node");
-                }
-            }
+            found.ifPresent(toSelect::add);
         }
 
         if (toSelect.isEmpty()) {
-            if (DIAGNOSTICS_ENABLED) {
-                System.out.println("DIAGNOSTICS: no UI nodes matched for selection");
-            }
             syncAssignments(Collections.emptyList());
             entitiesTree.getDataProvider().refreshAll();
             return;
         }
 
-        // perform selection
         isAdjustingSelection = true;
         try {
             entitiesTree.deselectAll();
@@ -397,19 +301,11 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
 
             syncAssignments(toSelect);
             entitiesTree.getDataProvider().refreshAll();
-
-            if (DIAGNOSTICS_ENABLED) {
-                System.out.println("DIAGNOSTICS: applied selection -> selected nodes count = " + toSelect.size());
-            }
         } finally {
             isAdjustingSelection = false;
         }
     }
 
-    /**
-     * CONSOLE DIAGNOSTICS:
-     * handleSelectionChange печатает в консоль детальную информацию о добавлении/удалении назначений.
-     */
     private void handleSelectionChange(Collection<RoleTreeNode> selectedNodes) {
         if (isAdjustingSelection) return;
 
@@ -419,7 +315,6 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
             return;
         }
 
-        // build selectedCodes set
         Set<String> selectedCodes = selectedNodes.stream()
                 .filter(n -> "PERMISSION".equals(n.getNodeType()))
                 .map(n -> n.getCode() != null ? n.getCode() : n.getResource())
@@ -432,15 +327,6 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         Set<String> toRemove = new HashSet<>(existingAssignedRoleCodes);
         toRemove.removeAll(selectedCodes);
 
-        if (DIAGNOSTICS_ENABLED) {
-            System.out.println("=== DIAGNOSTICS: handleSelectionChange ===");
-            System.out.println("selectedCodes = " + selectedCodes);
-            System.out.println("existingAssignedRoleCodes (before) = " + existingAssignedRoleCodes);
-            System.out.println("toAdd = " + toAdd);
-            System.out.println("toRemove = " + toRemove);
-        }
-
-        // add
         for (String code : toAdd) {
             try {
                 RoleAssignmentEntity ent = metadata.create(RoleAssignmentEntity.class);
@@ -449,16 +335,11 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
                 ent.setRoleType(RoleAssignmentRoleType.RESOURCE);
                 dataManager.save(ent);
                 existingAssignedRoleCodes.add(code);
-                if (DIAGNOSTICS_ENABLED) {
-                    System.out.println("DIAGNOSTICS: added DB assignment for code = " + code);
-                }
             } catch (Exception ex) {
-                System.out.println("ERROR adding assignment for code " + code + ": " + ex.getClass().getName() + " - " + ex.getMessage());
                 ex.printStackTrace(System.out);
             }
         }
 
-        // remove
         if (!toRemove.isEmpty()) {
             try {
                 List<RoleAssignmentEntity> found = dataManager.load(RoleAssignmentEntity.class)
@@ -470,28 +351,14 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
                 if (!found.isEmpty()) {
                     dataManager.remove(found);
                     existingAssignedRoleCodes.removeAll(toRemove);
-                    if (DIAGNOSTICS_ENABLED) {
-                        System.out.println("DIAGNOSTICS: removed DB assignments for codes = " + toRemove);
-                    }
-                } else {
-                    if (DIAGNOSTICS_ENABLED) {
-                        System.out.println("DIAGNOSTICS: no matching DB rows found to remove for codes = " + toRemove);
-                    }
                 }
             } catch (Exception ex) {
-                System.out.println("ERROR removing assignments " + toRemove + ": " + ex.getClass().getName() + " - " + ex.getMessage());
                 ex.printStackTrace(System.out);
             }
         }
 
-        // refresh UI flags
         syncAssignments(selectedNodes);
         entitiesTree.getDataProvider().refreshAll();
-
-        if (DIAGNOSTICS_ENABLED) {
-            System.out.println("existingAssignedRoleCodes (after) = " + existingAssignedRoleCodes);
-            System.out.println("=== DIAGNOSTICS: handleSelectionChange END ===");
-        }
     }
 
     @Subscribe("nameFilter")
@@ -520,21 +387,5 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
                 entitiesTree.expand(clicked);
             }
         }
-    }
-
-    /**
-     * CONSOLE DIAGNOSTICS helper:
-     * Вручную подставляет код роли в existingAssignedRoleCodes и пробует применить selection.
-     * Можно вызвать из отладчика (IDE) или добавить временную кнопку для вызова.
-     */
-    public void testManualSelection(String code) {
-        System.out.println("DIAGNOSTICS: testManualSelection called with code = '" + code + "'");
-        if (code == null || code.trim().isEmpty()) {
-            System.out.println("DIAGNOSTICS: testManualSelection: пустой код");
-            return;
-        }
-        existingAssignedRoleCodes.clear();
-        existingAssignedRoleCodes.add(code.trim());
-        applyInitialSelectionFromExistingAssignments();
     }
 }
