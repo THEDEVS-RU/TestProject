@@ -5,6 +5,7 @@ import io.jmix.core.metamodel.annotation.InstanceName;
 import io.jmix.core.metamodel.annotation.JmixEntity;
 import io.jmix.security.model.ResourceRoleModel;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -40,6 +41,7 @@ public class RoleTreeNode extends ResourceRoleModel {
         node.name = name;
         node.category = category;
         node.assigned = false;
+        // id остаётся случайным — группы не должны совпадать по id между разными построениями
         return node;
     }
 
@@ -52,6 +54,16 @@ public class RoleTreeNode extends ResourceRoleModel {
         node.permissionType = type != null ? type : "";
         node.name = action;
         node.assigned = false;
+
+        try {
+            if (code != null) {
+                node.id = UUID.nameUUIDFromBytes(code.getBytes(StandardCharsets.UTF_8));
+            } else {
+                node.id = UUID.randomUUID();
+            }
+        } catch (Throwable ignored) {
+            node.id = UUID.randomUUID();
+        }
         return node;
     }
 

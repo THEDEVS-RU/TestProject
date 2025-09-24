@@ -16,7 +16,10 @@
 
         <textField id="nameFilter"
                    placeholder="Поиск по имени роли..."
-                   width="100%"/>
+                   width="100%"
+                   valueChangeMode="EAGER"
+                   valueChangeTimeout="200"
+                   clearButtonVisible="true"/>
 
         <comboBox id="categoryFilter"
                   placeholder="Категория"
