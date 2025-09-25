@@ -26,7 +26,10 @@ public class RoleTreeNode extends ResourceRoleModel {
     /** "GROUP" или "PERMISSION" */
     private String nodeType;
 
+
     private Boolean assigned = false;
+
+    private Boolean visualAssigned = false; // для названий(узлов) ролей
 
     private String action;
     private String resource;
@@ -41,7 +44,7 @@ public class RoleTreeNode extends ResourceRoleModel {
         node.name = name;
         node.category = category;
         node.assigned = false;
-        // id остаётся случайным — группы не должны совпадать по id между разными построениями
+        node.visualAssigned = false;
         return node;
     }
 
@@ -54,6 +57,7 @@ public class RoleTreeNode extends ResourceRoleModel {
         node.permissionType = type != null ? type : "";
         node.name = action;
         node.assigned = false;
+        node.visualAssigned = false;
 
         try {
             if (code != null) {
@@ -82,6 +86,23 @@ public class RoleTreeNode extends ResourceRoleModel {
         if (propagateDown && children != null) {
             for (RoleTreeNode c : children) {
                 c.setAssigned(this.assigned, true);
+            }
+        }
+    }
+
+    public Boolean getVisualAssigned() {
+        return visualAssigned;
+    }
+
+    public void setVisualAssigned(Boolean visualAssigned) {
+        setVisualAssigned(visualAssigned, true);
+    }
+
+    public void setVisualAssigned(Boolean visualAssigned, boolean propagateDown) {
+        this.visualAssigned = visualAssigned != null ? visualAssigned : Boolean.FALSE;
+        if (propagateDown && children != null) {
+            for (RoleTreeNode c : children) {
+                c.setVisualAssigned(this.visualAssigned, true);
             }
         }
     }

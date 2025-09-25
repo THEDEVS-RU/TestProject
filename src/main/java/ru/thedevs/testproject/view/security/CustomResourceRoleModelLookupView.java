@@ -7,6 +7,7 @@ import com.vaadin.flow.router.Route;
 import io.jmix.core.DataManager;
 import io.jmix.core.Metadata;
 import io.jmix.flowui.component.grid.TreeDataGrid;
+import io.jmix.flowui.kit.action.ActionPerformedEvent;
 import io.jmix.flowui.model.CollectionContainer;
 import io.jmix.flowui.view.*;
 import io.jmix.security.model.ResourceRole;
@@ -49,8 +50,12 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
 
     private final Set<String> existingAssignedRoleCodes = new HashSet<>();
 
+    private final Set<String> pendingSelectedRoleCodes = new LinkedHashSet<>();
+
     private boolean isAdjustingSelection = false;
     private boolean selectionListenerAttached = false;
+
+    private Set<RoleTreeNode> lastSelected = new LinkedHashSet<>();
 
     public void setSubjectUsername(String subjectUsername) {
         this.subjectUsername = subjectUsername;
@@ -68,7 +73,11 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         loadRoles();
         setupColumnsAndAssigned();
         loadAssignmentsFromDb();
-        applyInitialSelectionFromExistingAssignments();
+
+        pendingSelectedRoleCodes.clear();
+        pendingSelectedRoleCodes.addAll(existingAssignedRoleCodes);
+
+        applyInitialSelectionFromPending();
     }
 
     private void loadRoles() {
@@ -181,56 +190,112 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         if (!selectionListenerAttached) {
             entitiesTree.addSelectionListener(event -> {
                 if (isAdjustingSelection) return;
-                Set<RoleTreeNode> selected = new LinkedHashSet<>(entitiesTree.getSelectedItems());
 
-                boolean groupsSelected = selected.stream().anyMatch(s -> "GROUP".equals(s.getNodeType()));
-                if (groupsSelected) {
-                    // Expand selected groups so their children are visible when user checks the group
-                    selected.stream()
-                            .filter(s -> "GROUP".equals(s.getNodeType()))
-                            .forEach(entitiesTree::expand);
+                Set<RoleTreeNode> currentSelected = new LinkedHashSet<>(entitiesTree.getSelectedItems());
 
-                    Set<RoleTreeNode> newSel = new LinkedHashSet<>();
-                    for (RoleTreeNode s : selected) {
-                        if ("GROUP".equals(s.getNodeType())) {
-                            newSel.addAll(gatherPermissionDescendants(s));
-                        } else {
-                            newSel.add(s);
+                Set<RoleTreeNode> added = new LinkedHashSet<>(currentSelected);
+                added.removeAll(lastSelected);
+
+                Set<RoleTreeNode> removed = new LinkedHashSet<>(lastSelected);
+                removed.removeAll(currentSelected);
+
+                Set<RoleTreeNode> desired = new LinkedHashSet<>(currentSelected);
+
+                for (RoleTreeNode a : added) {
+                    if ("GROUP".equals(a.getNodeType())) {
+                        a.setVisualAssigned(true, false);
+
+                        try {
+                            entitiesTree.expand(a);
+                        } catch (Exception ignored) { }
+
+                        List<RoleTreeNode> perms = gatherPermissionDescendants(a);
+                        desired.addAll(perms);
+                        for (RoleTreeNode p : perms) {
+                            p.setVisualAssigned(true, false);
                         }
                     }
-
-                    isAdjustingSelection = true;
-                    entitiesTree.deselectAll();
-                    newSel.forEach(entitiesTree::select);
-
-                    handleSelectionChange(newSel);
-
-                    entitiesTree.getDataProvider().refreshAll();
-                    isAdjustingSelection = false;
-                } else {
-                    handleSelectionChange(selected);
                 }
+
+                for (RoleTreeNode r : removed) {
+                    if ("GROUP".equals(r.getNodeType())) {
+                        r.setVisualAssigned(false, false);
+
+                        List<RoleTreeNode> perms = gatherPermissionDescendants(r);
+                        desired.removeAll(perms);
+                        for (RoleTreeNode p : perms) {
+                            p.setVisualAssigned(false, false);
+                        }
+                    } else if ("PERMISSION".equals(r.getNodeType())) {
+                        r.setVisualAssigned(false, false);
+                    }
+                }
+
+                Set<RoleTreeNode> desiredPerms = desired.stream()
+                        .filter(n -> "PERMISSION".equals(n.getNodeType()))
+                        .collect(Collectors.toCollection(LinkedHashSet::new));
+                updatePendingFromSelection(desiredPerms);
+
+                isAdjustingSelection = true;
+                try {
+                    entitiesTree.deselectAll();
+                    for (RoleTreeNode it : desired) {
+                        entitiesTree.select(it);
+                    }
+                    syncAssignmentsForAll();
+                    refreshNodes(desiredPerms);
+                } finally {
+                    isAdjustingSelection = false;
+                }
+
+                lastSelected = new LinkedHashSet<>(entitiesTree.getSelectedItems());
             });
             selectionListenerAttached = true;
         }
-
-        entitiesTree.getDataProvider().refreshAll();
     }
 
-    private void syncAssignments(Collection<RoleTreeNode> selected) {
+    private void updatePendingFromSelection(Collection<RoleTreeNode> selectedPermissions) {
+        Set<String> selectedCodes = selectedPermissions.stream()
+                .filter(n -> "PERMISSION".equals(n.getNodeType()))
+                .map(n -> n.getCode() != null ? n.getCode() : n.getResource())
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        pendingSelectedRoleCodes.clear();
+        pendingSelectedRoleCodes.addAll(selectedCodes);
+    }
+
+    private void syncAssignmentsForAll() {
         Collection<RoleTreeNode> all = entitiesDc.getItems();
+        if (all == null) return;
+
         for (RoleTreeNode item : all) {
             if ("PERMISSION".equals(item.getNodeType())) {
-                boolean sel = selected.contains(item);
+                String code = item.getCode() != null ? item.getCode() : item.getResource();
+                boolean sel = code != null && pendingSelectedRoleCodes.contains(code);
                 item.setAssigned(sel, false);
+                item.setVisualAssigned(sel, false);
             }
         }
+
         for (RoleTreeNode item : all) {
             if ("GROUP".equals(item.getNodeType())) {
                 boolean allAssigned = item.getChildren() != null &&
                         item.getChildren().stream().allMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
                 item.setAssigned(allAssigned, false);
             }
+        }
+    }
+
+    private void refreshNodes(Collection<RoleTreeNode> nodes) {
+        if (nodes == null) return;
+        for (RoleTreeNode n : nodes) {
+            try {
+                entitiesTree.getDataProvider().refreshItem(n);
+                if (n.getParent() != null) {
+                    entitiesTree.getDataProvider().refreshItem(n.getParent());
+                }
+            } catch (Exception ignored) { }
         }
     }
 
@@ -264,68 +329,74 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
                 .forEach(existingAssignedRoleCodes::add);
     }
 
-    private void applyInitialSelectionFromExistingAssignments() {
-        if (existingAssignedRoleCodes == null || existingAssignedRoleCodes.isEmpty()) {
-            syncAssignments(Collections.emptyList());
-            entitiesTree.getDataProvider().refreshAll();
-            return;
+    private void applyInitialSelectionFromPending() {
+        Collection<RoleTreeNode> all = entitiesDc.getItems();
+        if (all == null) return;
+
+        for (RoleTreeNode node : all) {
+            if ("PERMISSION".equals(node.getNodeType())) {
+                String code = node.getCode() != null ? node.getCode() : node.getResource();
+                boolean sel = code != null && pendingSelectedRoleCodes.contains(code);
+                node.setAssigned(sel, false);
+                node.setVisualAssigned(sel, false);
+            }
         }
 
-        Set<RoleTreeNode> toSelect = new LinkedHashSet<>();
-        for (String dbCode : existingAssignedRoleCodes) {
-            if (dbCode == null) continue;
-            String norm = dbCode.trim().toLowerCase();
-
-            Optional<RoleTreeNode> found = entitiesDc.getItems().stream()
-                    .filter(n -> "PERMISSION".equals(n.getNodeType()))
-                    .filter(n -> {
-                        String c = n.getCode() != null ? n.getCode().trim().toLowerCase() : null;
-                        String r = n.getResource() != null ? n.getResource().trim().toLowerCase() : null;
-                        return (c != null && c.equals(norm)) || (r != null && r.equals(norm));
-                    })
-                    .findFirst();
-
-            found.ifPresent(toSelect::add);
+        for (RoleTreeNode node : all) {
+            if ("GROUP".equals(node.getNodeType())) {
+                boolean allChildrenVisual = node.getChildren() != null &&
+                        node.getChildren().stream().allMatch(c -> Boolean.TRUE.equals(c.getVisualAssigned()));
+                node.setVisualAssigned(allChildrenVisual, false);
+                boolean allChildrenAssigned = node.getChildren() != null &&
+                        node.getChildren().stream().allMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
+                node.setAssigned(allChildrenAssigned, false);
+            }
         }
 
-        if (toSelect.isEmpty()) {
-            syncAssignments(Collections.emptyList());
-            entitiesTree.getDataProvider().refreshAll();
-            return;
-        }
+        Set<RoleTreeNode> toSelect = all.stream()
+                .filter(n -> "PERMISSION".equals(n.getNodeType()))
+                .filter(n -> {
+                    String code = n.getCode() != null ? n.getCode() : n.getResource();
+                    return code != null && pendingSelectedRoleCodes.contains(code);
+                })
+                .collect(Collectors.toCollection(LinkedHashSet::new));
 
         isAdjustingSelection = true;
         try {
             entitiesTree.deselectAll();
             toSelect.forEach(entitiesTree::select);
-
-            syncAssignments(toSelect);
-            entitiesTree.getDataProvider().refreshAll();
+            refreshNodes(toSelect);
+            lastSelected = new LinkedHashSet<>(entitiesTree.getSelectedItems());
         } finally {
             isAdjustingSelection = false;
         }
     }
 
-    private void handleSelectionChange(Collection<RoleTreeNode> selectedNodes) {
-        if (isAdjustingSelection) return;
+    @Subscribe("selectAction")
+    public void onSelectAction(ActionPerformedEvent event) {
+        persistPendingAssignments();
 
+        clearGroupVisualChecks();
+
+        pendingSelectedRoleCodes.clear();
+        pendingSelectedRoleCodes.addAll(existingAssignedRoleCodes);
+        applyInitialSelectionFromPending();
+
+        handleSelection();
+    }
+
+    private void persistPendingAssignments() {
         if (subjectUsername == null || subjectUsername.isEmpty()) {
-            syncAssignments(selectedNodes);
-            entitiesTree.getDataProvider().refreshAll();
+            existingAssignedRoleCodes.clear();
+            existingAssignedRoleCodes.addAll(pendingSelectedRoleCodes);
             return;
         }
 
-        Set<String> selectedCodes = selectedNodes.stream()
-                .filter(n -> "PERMISSION".equals(n.getNodeType()))
-                .map(n -> n.getCode() != null ? n.getCode() : n.getResource())
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-
-        Set<String> toAdd = new HashSet<>(selectedCodes);
+        Set<String> toAdd = new HashSet<>(pendingSelectedRoleCodes);
         toAdd.removeAll(existingAssignedRoleCodes);
 
         Set<String> toRemove = new HashSet<>(existingAssignedRoleCodes);
-        toRemove.removeAll(selectedCodes);
+        toRemove.removeAll(pendingSelectedRoleCodes);
 
         for (String code : toAdd) {
             try {
@@ -356,9 +427,21 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
                 ex.printStackTrace(System.out);
             }
         }
+    }
 
-        syncAssignments(selectedNodes);
-        entitiesTree.getDataProvider().refreshAll();
+    private void clearGroupVisualChecks() {
+        Collection<RoleTreeNode> all = entitiesDc.getItems();
+        if (all == null) return;
+
+        List<RoleTreeNode> groups = all.stream()
+                .filter(n -> "GROUP".equals(n.getNodeType()))
+                .collect(Collectors.toList());
+        for (RoleTreeNode g : groups) {
+            g.setVisualAssigned(false, false);
+            try {
+                entitiesTree.getDataProvider().refreshItem(g);
+            } catch (Exception ignored) { }
+        }
     }
 
     @Subscribe("nameFilter")
@@ -366,7 +449,7 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         nameFilterText = event.getValue() != null ? event.getValue() : "";
         loadRoles();
         setupColumnsAndAssigned();
-        applyInitialSelectionFromExistingAssignments();
+        applyInitialSelectionFromPending();
     }
 
     @Subscribe("categoryFilter")
@@ -374,7 +457,7 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         selectedCategory = event.getValue();
         loadRoles();
         setupColumnsAndAssigned();
-        applyInitialSelectionFromExistingAssignments();
+        applyInitialSelectionFromPending();
     }
 
     @Subscribe("entitiesTree")
