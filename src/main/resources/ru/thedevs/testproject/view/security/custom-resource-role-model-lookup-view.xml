@@ -14,17 +14,26 @@
 
     <layout expand="entitiesTree">
 
-        <textField id="nameFilter"
-                   placeholder="Поиск по имени роли..."
-                   width="100%"
-                   valueChangeMode="EAGER"
-                   valueChangeTimeout="200"
-                   clearButtonVisible="true"/>
+        <hbox spacing="true" width="100%">
+            <textField id="nameFilter"
+                       placeholder="Поиск по имени роли..."
+                       width="100%"
+                       valueChangeMode="EAGER"
+                       valueChangeTimeout="200"
+                       clearButtonVisible="true"/>
+            <button id="searchBtn" text="Найти"/>
+            <button id="clearSearchBtn" text="Отмена"/>
+        </hbox>
 
-        <comboBox id="categoryFilter"
-                  placeholder="Категория"
-                  clearButtonVisible="true"
-                  width="100%"/>
+
+        <hbox spacing="true" width="100%">
+            <comboBox id="categoryFilter"
+                     placeholder="Категория"
+                     clearButtonVisible="true"
+                     width="100%"/>
+            <button id="searchCategoryBtn" text="Найти"/>
+            <button id="clearCategorySearchBtn" text="Отмена"/>
+        </hbox>
 
         <treeDataGrid id="entitiesTree"
                       dataContainer="entitiesDc"
