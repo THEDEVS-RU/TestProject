@@ -19,7 +19,10 @@ import io.jmix.security.role.assignment.RoleAssignmentRoleType;
 import io.jmix.securitydata.entity.RoleAssignmentEntity;
 import io.jmix.security.model.RoleSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import ru.thedevs.entities.UserEntity;
+import ru.thedevs.service.ICoreUtilsService;
 import ru.thedevs.testproject.dto.RoleTreeNode;
+import ru.thedevs.testproject.entity.User;
 import ru.thedevs.testproject.view.main.MainView;
 
 import java.lang.reflect.Field;
@@ -63,9 +66,14 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
     private boolean selectionListenerAttached = false;
 
     private Set<RoleTreeNode> lastSelected = new LinkedHashSet<>();
-    
+
     private final List<RoleTreeNode> initialGroups = new ArrayList<>();
     private final List<RoleTreeNode> initialNodes = new ArrayList<>();
+
+    private boolean nameFilterListenerAttached = false;
+    private boolean categoryFilterListenerAttached = false;
+
+    private boolean filterAdjusting = false;
 
     public void setSubjectUsername(String subjectUsername) {
         this.subjectUsername = subjectUsername;
@@ -92,7 +100,31 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
             categoryFilter.setClearButtonVisible(true);
         }
 
+        attachFilterListenersIfNeeded();
+
         applyInitialSelectionFromPending();
+    }
+
+    private void attachFilterListenersIfNeeded() {
+        if (nameFilter != null && !nameFilterListenerAttached) {
+            nameFilter.addValueChangeListener((HasValue.ValueChangeEvent<String> e) -> {
+                if (filterAdjusting) return;
+                String q = e.getValue();
+                String category = categoryFilter != null ? categoryFilter.getValue() : null;
+                applyFilter(q, category);
+            });
+            nameFilterListenerAttached = true;
+        }
+
+        if (categoryFilter != null && !categoryFilterListenerAttached) {
+            categoryFilter.addValueChangeListener((HasValue.ValueChangeEvent<String> e) -> {
+                if (filterAdjusting) return;
+                String category = e.getValue();
+                String q = nameFilter != null ? nameFilter.getValue() : null;
+                applyFilter(q, category);
+            });
+            categoryFilterListenerAttached = true;
+        }
     }
 
     private void loadRoles() {
@@ -342,10 +374,7 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
                 .forEach(existingAssignedRoleCodes::add);
     }
 
-    /**
-     * Устанавливает визуальное состояние и выбор PERMISSION'ов, которые уже есть в pendingSelectedRoleCodes.
-     * Используется при начальном показе и при полном сбросе.
-     */
+
     private void applyInitialSelectionFromPending() {
         Collection<RoleTreeNode> all = entitiesDc.getItems();
         if (all == null) return;
@@ -389,48 +418,6 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         }
     }
 
-    @Subscribe("searchBtn")
-    public void onSearchBtnClick(ClickEvent<Button> event) {
-        String q = nameFilter != null ? nameFilter.getValue() : null;
-        String category = categoryFilter != null ? categoryFilter.getValue() : null;
-        applyFilter(q, category);
-    }
-
-    @Subscribe("searchCategoryBtn")
-    public void onSearchCategoryBtnClick(ClickEvent<Button> event) {
-        String q = nameFilter != null ? nameFilter.getValue() : null;
-        String category = categoryFilter != null ? categoryFilter.getValue() : null;
-        applyFilter(q, category);
-    }
-
-    @Subscribe("clearSearchBtn")
-    public void onClearSearchBtnClick(ClickEvent<Button> event) {
-        if (nameFilter != null) nameFilter.clear();
-
-        String category = categoryFilter != null ? categoryFilter.getValue() : null;
-        if (category != null && !category.isEmpty()) {
-            applyFilter("", category);
-        } else {
-            entitiesDc.setItems(new ArrayList<>(initialNodes));
-            setupColumnsAndAssigned();
-            applyInitialSelectionFromPending();
-        }
-    }
-
-    @Subscribe("clearCategorySearchBtn")
-    public void onClearCategorySearchBtnClick(ClickEvent<Button> event) {
-        if (categoryFilter != null) categoryFilter.clear();
-
-        String q = nameFilter != null ? nameFilter.getValue() : null;
-        if (q != null && !q.trim().isEmpty()) {
-            applyFilter(q, null);
-        } else {
-            entitiesDc.setItems(new ArrayList<>(initialNodes));
-            setupColumnsAndAssigned();
-            applyInitialSelectionFromPending();
-        }
-    }
-
     private void applyFilter(String text, String category) {
         if (initialGroups.isEmpty()) {
             loadRoles();
@@ -455,16 +442,6 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         entitiesDc.setItems(displayList);
         setupColumnsAndAssigned();
         syncAssignmentsForAll();
-    }
-
-    @Subscribe("nameFilter")
-    public void onNameFilterValueChange(HasValue.ValueChangeEvent<String> event) {
-        // no-op: поиск только по кнопке "Найти"
-    }
-
-    @Subscribe("categoryFilter")
-    public void onCategoryFilterValueChange(HasValue.ValueChangeEvent<String> event) {
-        // no-op: категория применяется только по кнопке "Найти"
     }
 
     @Subscribe("entitiesTree")

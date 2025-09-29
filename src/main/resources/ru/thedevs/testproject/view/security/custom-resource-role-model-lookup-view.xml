@@ -21,8 +21,6 @@
                        valueChangeMode="EAGER"
                        valueChangeTimeout="200"
                        clearButtonVisible="true"/>
-            <button id="searchBtn" text="Найти"/>
-            <button id="clearSearchBtn" text="Отмена"/>
         </hbox>
 
 
@@ -31,8 +29,6 @@
                      placeholder="Категория"
                      clearButtonVisible="true"
                      width="100%"/>
-            <button id="searchCategoryBtn" text="Найти"/>
-            <button id="clearCategorySearchBtn" text="Отмена"/>
         </hbox>
 
         <treeDataGrid id="entitiesTree"
