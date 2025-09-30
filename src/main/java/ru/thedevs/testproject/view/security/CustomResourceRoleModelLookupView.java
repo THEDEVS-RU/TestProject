@@ -18,6 +18,7 @@ import io.jmix.security.role.ResourceRoleRepository;
 import io.jmix.security.role.assignment.RoleAssignmentRoleType;
 import io.jmix.securitydata.entity.RoleAssignmentEntity;
 import io.jmix.security.model.RoleSource;
+import io.jmix.flowui.kit.action.ActionPerformedEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import ru.thedevs.entities.UserEntity;
 import ru.thedevs.service.ICoreUtilsService;
@@ -486,5 +487,83 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
             }
         } catch (Throwable ignored) { }
         return false;
+    }
+
+    @Subscribe("selectAction")
+    public void onSelectAction(ActionPerformedEvent event) {
+        persistPendingAssignments();
+
+        clearGroupVisualChecks();
+
+        pendingSelectedRoleCodes.clear();
+        pendingSelectedRoleCodes.addAll(existingAssignedRoleCodes);
+        applyInitialSelectionFromPending();
+
+        try {
+            Method m = this.getClass().getMethod("handleSelection");
+            if (m != null) {
+                m.invoke(this);
+            }
+        } catch (NoSuchMethodException nsme) {
+        } catch (Throwable ignored) { }
+    }
+
+    private void persistPendingAssignments() {
+        if (subjectUsername == null || subjectUsername.isEmpty()) {
+            existingAssignedRoleCodes.clear();
+            existingAssignedRoleCodes.addAll(pendingSelectedRoleCodes);
+            return;
+        }
+
+        Set<String> toAdd = new HashSet<>(pendingSelectedRoleCodes);
+        toAdd.removeAll(existingAssignedRoleCodes);
+
+        Set<String> toRemove = new HashSet<>(existingAssignedRoleCodes);
+        toRemove.removeAll(pendingSelectedRoleCodes);
+
+        for (String code : toAdd) {
+            try {
+                RoleAssignmentEntity ent = metadata.create(RoleAssignmentEntity.class);
+                ent.setUsername(subjectUsername);
+                ent.setRoleCode(code);
+                ent.setRoleType(RoleAssignmentRoleType.RESOURCE);
+                dataManager.save(ent);
+                existingAssignedRoleCodes.add(code);
+            } catch (Exception ex) {
+                ex.printStackTrace(System.out);
+            }
+        }
+
+        if (!toRemove.isEmpty()) {
+            try {
+                List<RoleAssignmentEntity> found = dataManager.load(RoleAssignmentEntity.class)
+                        .query("select r from sec_RoleAssignmentEntity r where r.username = :username and r.roleCode in :codes and r.roleType = :type")
+                        .parameter("username", subjectUsername)
+                        .parameter("codes", toRemove)
+                        .parameter("type", RoleAssignmentRoleType.RESOURCE)
+                        .list();
+                if (!found.isEmpty()) {
+                    dataManager.remove(found);
+                    existingAssignedRoleCodes.removeAll(toRemove);
+                }
+            } catch (Exception ex) {
+                ex.printStackTrace(System.out);
+            }
+        }
+    }
+
+    private void clearGroupVisualChecks() {
+        Collection<RoleTreeNode> all = entitiesDc.getItems();
+        if (all == null) return;
+
+        List<RoleTreeNode> groups = all.stream()
+                .filter(n -> "GROUP".equals(n.getNodeType()))
+                .collect(Collectors.toList());
+        for (RoleTreeNode g : groups) {
+            g.setVisualAssigned(false, false);
+            try {
+                entitiesTree.getDataProvider().refreshItem(g);
+            } catch (Exception ignored) { }
+        }
     }
 }
