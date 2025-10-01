@@ -2,17 +2,24 @@ package ru.thedevs.testproject.view.security;
 
 import com.vaadin.flow.component.ClickEvent;
 import com.vaadin.flow.component.HasValue;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.ItemDoubleClickEvent;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.router.BeforeEnterEvent;
+import com.vaadin.flow.router.Location;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.router.RouteParameters;
 import io.jmix.core.DataManager;
 import io.jmix.core.Metadata;
+import io.jmix.core.security.UserRepository;
 import io.jmix.flowui.component.grid.TreeDataGrid;
 import io.jmix.flowui.model.CollectionContainer;
 import io.jmix.flowui.view.*;
+import io.jmix.flowui.view.navigation.RouteSupport;
+import io.jmix.flowui.view.navigation.UrlParamSerializer;
 import io.jmix.security.model.ResourceRole;
 import io.jmix.security.role.ResourceRoleRepository;
 import io.jmix.security.role.assignment.RoleAssignmentRoleType;
@@ -20,11 +27,14 @@ import io.jmix.securitydata.entity.RoleAssignmentEntity;
 import io.jmix.security.model.RoleSource;
 import io.jmix.flowui.kit.action.ActionPerformedEvent;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.userdetails.UserDetails;
 import ru.thedevs.entities.UserEntity;
 import ru.thedevs.service.ICoreUtilsService;
 import ru.thedevs.testproject.dto.RoleTreeNode;
 import ru.thedevs.testproject.entity.User;
 import ru.thedevs.testproject.view.main.MainView;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -54,10 +64,19 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
 
     @Autowired
     private DataManager dataManager;
+    @Autowired
+    private RouteSupport routeSupport;
+
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    protected UrlParamSerializer urlParamSerializer;
 
     @Autowired
     private Metadata metadata;
 
+    private UserDetails user;
+    
     private String subjectUsername = null;
 
     private final Set<String> existingAssignedRoleCodes = new HashSet<>();
@@ -87,11 +106,36 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         }
     }
 
+    private void locUserName(){
+        try {
+            Location loc = routeSupport.getActiveViewLocation(UI.getCurrent());
+
+            String path = loc.getPath();
+            if (path != null && !path.isEmpty()) {
+                String[] segments = path.split("/");
+                for (int i = 0; i < segments.length; i++) {
+                    if ("roleassignment".equals(segments[i]) && i + 1 < segments.length) {
+                        String encoded = segments[i + 1];
+                        try {
+                            subjectUsername = urlParamSerializer.deserialize(String.class, encoded);
+                        } catch (Exception ex) {
+                            subjectUsername = encoded;
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+        catch (Exception e) {}
+    }
+
     @Subscribe
     public void onBeforeShow(BeforeShowEvent event) {
+        locUserName();
         loadRoles();
         setupColumnsAndAssigned();
         loadAssignmentsFromDb();
+        System.out.println("username" + this.subjectUsername);
 
         pendingSelectedRoleCodes.clear();
         pendingSelectedRoleCodes.addAll(existingAssignedRoleCodes);
@@ -361,7 +405,6 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
 
     private void loadAssignmentsFromDb() {
         existingAssignedRoleCodes.clear();
-        if (subjectUsername == null || subjectUsername.isEmpty()) return;
 
         List<RoleAssignmentEntity> assignments = dataManager.load(RoleAssignmentEntity.class)
                 .query("select r from sec_RoleAssignmentEntity r where r.username = :username and r.roleType = :type")
@@ -374,7 +417,6 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
                 .filter(Objects::nonNull)
                 .forEach(existingAssignedRoleCodes::add);
     }
-
 
     private void applyInitialSelectionFromPending() {
         Collection<RoleTreeNode> all = entitiesDc.getItems();
@@ -391,12 +433,20 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
 
         for (RoleTreeNode node : all) {
             if ("GROUP".equals(node.getNodeType())) {
-                boolean allChildrenVisual = node.getChildren() != null &&
-                        node.getChildren().stream().allMatch(c -> Boolean.TRUE.equals(c.getVisualAssigned()));
-                node.setVisualAssigned(allChildrenVisual, false);
-                boolean allChildrenAssigned = node.getChildren() != null &&
-                        node.getChildren().stream().allMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
-                node.setAssigned(allChildrenAssigned, false);
+                List<RoleTreeNode> children = node.getChildren();
+                if (children == null) continue;
+
+                boolean anySelected = children.stream().anyMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
+                boolean allSelected = children.stream().allMatch(c -> Boolean.TRUE.equals(c.getAssigned()));
+
+                if (anySelected) {
+                    try {
+                        entitiesTree.expand(node);
+                    } catch (Exception ignored) {}
+                }
+
+                node.setVisualAssigned(allSelected, false);
+                node.setAssigned(allSelected, false);
             }
         }
 
@@ -412,12 +462,14 @@ public class CustomResourceRoleModelLookupView extends StandardListView<RoleTree
         try {
             entitiesTree.deselectAll();
             toSelect.forEach(entitiesTree::select);
+
             refreshNodes(toSelect);
             lastSelected = new LinkedHashSet<>(entitiesTree.getSelectedItems());
         } finally {
             isAdjustingSelection = false;
         }
     }
+
 
     private void applyFilter(String text, String category) {
         if (initialGroups.isEmpty()) {
