@@ -8,7 +8,6 @@ import io.jmix.security.model.ResourceRoleModel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 
 @JmixEntity(name = "test_RoleTreeNode")
@@ -26,7 +25,6 @@ public class RoleTreeNode extends ResourceRoleModel {
     /** "GROUP" или "PERMISSION" */
     private String nodeType;
 
-
     private Boolean assigned = false;
 
     private Boolean visualAssigned = false; // для названий(узлов) ролей
@@ -38,9 +36,14 @@ public class RoleTreeNode extends ResourceRoleModel {
 
     private List<RoleTreeNode> children = new ArrayList<>();
 
+    // Константы для nodeType / default group name
+    public static final String GROUP = "GROUP";
+    public static final String PERMISSION = "PERMISSION";
+    public static final String NO_GROUP = "Без группы";
+
     public static RoleTreeNode group(String name, String category) {
         RoleTreeNode node = new RoleTreeNode();
-        node.nodeType = "GROUP";
+        node.nodeType = GROUP;
         node.name = name;
         node.category = category;
         node.assigned = false;
@@ -50,7 +53,7 @@ public class RoleTreeNode extends ResourceRoleModel {
 
     public static RoleTreeNode permission(String action, String code, String type) {
         RoleTreeNode node = new RoleTreeNode();
-        node.nodeType = "PERMISSION";
+        node.nodeType = PERMISSION;
         node.action = action;
         node.setCode(code);
         node.resource = code;
@@ -143,16 +146,13 @@ public class RoleTreeNode extends ResourceRoleModel {
         }
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        RoleTreeNode that = (RoleTreeNode) o;
-        return Objects.equals(id, that.id);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(id);
+    public static List<RoleTreeNode> flatten(List<RoleTreeNode> nodes) {
+        List<RoleTreeNode> flat = new ArrayList<>();
+        if (nodes == null) return flat;
+        for (RoleTreeNode n : nodes) {
+            flat.add(n);
+            flat.addAll(flatten(n.getChildren()));
+        }
+        return flat;
     }
 }

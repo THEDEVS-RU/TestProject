@@ -16,7 +16,7 @@
 
         <hbox spacing="true" width="100%">
             <textField id="nameFilter"
-                       placeholder="Поиск по имени роли..."
+                       placeholder="msg://ru.thedevs.testproject/view.roles.headerSearch"
                        width="100%"
                        valueChangeMode="EAGER"
                        valueChangeTimeout="200"
@@ -26,7 +26,7 @@
 
         <hbox spacing="true" width="100%">
             <comboBox id="categoryFilter"
-                     placeholder="Категория"
+                     placeholder="msg://ru.thedevs.testproject/view.roles.headerCategory"
                      clearButtonVisible="true"
                      width="100%"/>
         </hbox>
