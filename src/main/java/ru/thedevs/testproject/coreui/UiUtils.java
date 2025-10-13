@@ -1,8 +1,12 @@
 package ru.thedevs.testproject.coreui;
 
+import com.vaadin.flow.component.ClickEvent;
+import com.vaadin.flow.component.ComponentEventListener;
 import com.vaadin.flow.component.avatar.Avatar;
+import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.server.StreamResource;
 import io.jmix.core.FileRef;
@@ -92,6 +96,7 @@ public class UiUtils {
 
     public HorizontalLayout createUserIndicator() {
         HorizontalLayout box = uiComponents.create(HorizontalLayout.class);
+        box.setDefaultVerticalComponentAlignment(FlexComponent.Alignment.CENTER);
         UserEntity user = coreUtilsService.getCurrentEffectiveUser();
         if (user == null) {
             return box;
@@ -99,15 +104,31 @@ public class UiUtils {
 
         Avatar avatar = createUserAvatar(user);
 
+
+        avatar.getElement().getStyle().set("cursor", "pointer");
+        avatar.getElement().setAttribute("title", user.getDisplayedName() != null ? user.getDisplayedName() : "");
+        avatar.getElement().addEventListener("click", evt -> openUserDetail(user));
+
         JmixButton nameButton = getDefaultButton(null, "tertiary-inline",
-                user.getDisplayName(), e -> openUserDetail(user));
+                user.getDisplayedName(), e -> openUserDetail(user));
+
+        String maxWidth = "200px";
+        nameButton.getElement().getStyle().set("max-width", maxWidth);
+        nameButton.getElement().getStyle().set("overflow", "hidden");
+        nameButton.getElement().getStyle().set("text-overflow", "ellipsis");
+        nameButton.getElement().getStyle().set("white-space", "nowrap");
+        nameButton.getElement().getStyle().set("display", "inline-block");
+
+        if (user.getDisplayedName() != null) {
+            nameButton.getElement().setAttribute("title", user.getDisplayedName());
+        }
 
         box.add(avatar, nameButton);
         return box;
     }
 
     private Avatar createUserAvatar(UserEntity user) {
-        Avatar avatar = new Avatar(user.getDisplayName());
+        Avatar avatar = new Avatar(user.getDisplayedName());
         avatar.setThemeName("xsmall");
 
         FileRef picture = user.getPicture();
