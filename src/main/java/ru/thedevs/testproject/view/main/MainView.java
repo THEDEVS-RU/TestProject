@@ -27,8 +27,10 @@ public class MainView extends StandardMainView {
 
     @Subscribe
     public void onInit(InitEvent event) {
-        userIndicator.removeAll();
-        userIndicator.add(uiUtils.createUserIndicator());
+        if (uiUtils.createUserIndicator() != null) {
+            userIndicator.removeAll();
+            userIndicator.add(uiUtils.createUserIndicator());
+        }
     }
 }
 

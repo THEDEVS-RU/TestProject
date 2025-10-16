@@ -105,69 +105,51 @@ public class UiUtils {
     }
 
     public HorizontalLayout createUserIndicator() {
-        HorizontalLayout box = uiComponents.create(HorizontalLayout.class);
-        box.setDefaultVerticalComponentAlignment(FlexComponent.Alignment.CENTER);
-        UserEntity user = coreUtilsService.getCurrentEffectiveUser();
-        if (user == null) {
-            return box;
-        }
-
-        Avatar avatar = createUserAvatar(user);
-
-        String fullFio = formatFullFioOrDisplayed(user);
-        avatar.getElement().getStyle().set("cursor", "pointer");
-        avatar.getElement().setAttribute("title", fullFio);
-        avatar.getElement().addEventListener("click", evt -> openUserDetail(user));
-
-        String shortFio = formatShortFio(user);
-        JmixButton nameButton = getDefaultButton(null, "tertiary-inline",
-                shortFio, null);
-
-        if (fullFio != null) {
-            nameButton.getElement().setAttribute("title", fullFio);
-        }
-
-        String maxWidth = "200px";
-        nameButton.getElement().getStyle().set("max-width", maxWidth);
-        nameButton.getElement().getStyle().set("overflow", "hidden");
-        nameButton.getElement().getStyle().set("text-overflow", "ellipsis");
-        nameButton.getElement().getStyle().set("white-space", "nowrap");
-        nameButton.getElement().getStyle().set("display", "inline-block");
-
         List<UserDetails> substitutable = null;
         if (userSubstitutionManager != null) {
             substitutable = userSubstitutionManager.getCurrentSubstitutedUsers();
+            System.out.println(substitutable);
         }
-
-        if (substitutable != null && !substitutable.isEmpty()) {
-            ContextMenu ctx = new ContextMenu();
-            ctx.setTarget(nameButton);
-            ctx.setOpenOnClick(true);
-            for (UserDetails ud : substitutable) {
-                String uname = ud == null ? "" : (ud.getUsername() == null ? "" : ud.getUsername());
-                ctx.addItem(uname, e -> {
-                    if (userSubstitutionManager != null && uname != null && !uname.isBlank()) {
-                        try {
-                            userSubstitutionManager.substituteUser(uname);
-                            UI current = UI.getCurrent();
-                            if (current != null) {
-                                current.getPage().reload();
-                            }
-                        } catch (Exception ex) {
-                        }
-                    }
-                });
+        if (substitutable == null || substitutable.isEmpty()) {
+            HorizontalLayout box = uiComponents.create(HorizontalLayout.class);
+            box.setDefaultVerticalComponentAlignment(FlexComponent.Alignment.CENTER);
+            UserEntity user = coreUtilsService.getCurrentEffectiveUser();
+            if (user == null) {
+                return box;
             }
-        } else {
-            nameButton.addClickListener(e -> openUserDetail(user));
-        }
 
-        box.add(avatar, nameButton);
-        return box;
+            Avatar avatar = createUserAvatar(user);
+
+            String shortFio = formatShortFio(user);
+            avatar.getElement().getStyle().set("cursor", "pointer");
+            avatar.getElement().setAttribute("title", shortFio);
+            avatar.getElement().addEventListener("click", evt -> openUserDetail(user));
+
+            JmixButton nameButton = getDefaultButton(null, "tertiary-inline",
+                    shortFio, null);
+
+            if (shortFio != null) {
+                nameButton.getElement().setAttribute("title", shortFio);
+            }
+
+            String maxWidth = "200px";
+            nameButton.getElement().getStyle().set("max-width", maxWidth);
+            nameButton.getElement().getStyle().set("overflow", "hidden");
+            nameButton.getElement().getStyle().set("text-overflow", "ellipsis");
+            nameButton.getElement().getStyle().set("white-space", "nowrap");
+            nameButton.getElement().getStyle().set("display", "inline-block");
+
+
+            nameButton.addClickListener(e -> openUserDetail(user));
+
+            box.add(avatar, nameButton);
+            return box;
+        }
+        return null;
     }
 
     private Avatar createUserAvatar(UserEntity user) {
-        Avatar avatar = new Avatar(formatFullFioOrDisplayed(user));
+        Avatar avatar = new Avatar(formatShortFio(user));
         avatar.setThemeName("xsmall");
         FileRef picture = user.getPicture();
         if (picture != null) {
@@ -194,9 +176,9 @@ public class UiUtils {
 
     private String formatShortFio(UserEntity user) {
         if (user == null) return "";
-        String last = safeGet(user, "getLastName", "getSurname");
-        String first = safeGet(user, "getFirstName", "getGivenName");
-        String middle = safeGet(user, "getMiddleName", "getPatronymic");
+        String last = user.getLastName();
+        String first = user.getFirstName();
+        String middle = user.getMiddleName();
         if (last == null || last.isBlank()) {
             return user.getDisplayedName() != null ? user.getDisplayedName() : "";
         }
@@ -210,40 +192,5 @@ public class UiUtils {
         return sb.toString().trim();
     }
 
-    private String formatFullFioOrDisplayed(UserEntity user) {
-        if (user == null) return "";
-        String last = safeGet(user, "getLastName", "getSurname");
-        String first = safeGet(user, "getFirstName", "getGivenName");
-        String middle = safeGet(user, "getMiddleName", "getPatronymic");
-        StringBuilder sb = new StringBuilder();
-        if (last != null && !last.isBlank()) sb.append(last.trim());
-        if (first != null && !first.isBlank()) {
-            if (sb.length() > 0) sb.append(" ");
-            sb.append(first.trim());
-        }
-        if (middle != null && !middle.isBlank()) {
-            if (sb.length() > 0) sb.append(" ");
-            sb.append(middle.trim());
-        }
-        String result = sb.toString().trim();
-        return !result.isEmpty()
-                ? result
-                : (user.getDisplayedName() != null ? user.getDisplayedName() : "");
-    }
 
-    private String safeGet(UserEntity user, String... getterNames) {
-        for (String getter : getterNames) {
-            try {
-                var method = user.getClass().getMethod(getter);
-                Object value = method.invoke(user);
-                if (value != null) {
-                    String s = value.toString().trim();
-                    if (!s.isEmpty()) return s;
-                }
-            } catch (NoSuchMethodException ignored) {
-            } catch (Exception ignored) {
-            }
-        }
-        return null;
-    }
 }
