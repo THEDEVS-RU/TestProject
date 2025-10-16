@@ -29,7 +29,8 @@
                     <listMenu id="menu"/>
                 </nav>
                 <footer id="footer" classNames="jmix-main-view-footer">
-                    <hbox id="userIndicator" classNames="jmix-main-view-user-indicator"/>
+                    <hbox id="userIndicatorEventListener" classNames="jmix-main-view-user-indicator"/>
+                    <userIndicator id="userIndicator"/>
                     <button id="logoutButton"
                             action="logoutAction"
                             classNames="jmix-logout-button"/>

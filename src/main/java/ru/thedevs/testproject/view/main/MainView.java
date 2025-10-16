@@ -16,7 +16,7 @@ import ru.thedevs.testproject.coreui.UiUtils;
 public class MainView extends StandardMainView {
 
     @ViewComponent
-    private HorizontalLayout userIndicator;
+    private HorizontalLayout userIndicatorEventListener;
 
     private final UiUtils uiUtils;
 
@@ -28,8 +28,8 @@ public class MainView extends StandardMainView {
     @Subscribe
     public void onInit(InitEvent event) {
         if (uiUtils.createUserIndicator() != null) {
-            userIndicator.removeAll();
-            userIndicator.add(uiUtils.createUserIndicator());
+            userIndicatorEventListener.removeAll();
+            userIndicatorEventListener.add(uiUtils.createUserIndicator());
         }
     }
 }

@@ -191,6 +191,4 @@ public class UiUtils {
         }
         return sb.toString().trim();
     }
-
-
 }
